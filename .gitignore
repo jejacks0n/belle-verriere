@@ -1,0 +1,10 @@
+# Local state: your settings, prompt drift, history, generated images and caches
+data/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store

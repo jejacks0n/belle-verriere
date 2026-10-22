@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Window</title>
+<style>
+  /* Black is opaque on a transparent LCD, so everything outside the image is black. */
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  #stage { position: fixed; top: 50%; left: 50%; transform-origin: center center; }
+  .layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+           opacity: 0; transition-property: opacity; transition-timing-function: ease-in-out; }
+  .layer.on { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <img class="layer" id="a" alt="">
+  <img class="layer" id="b" alt="">
+</div>
+<script>
+const stage = document.getElementById('stage');
+const layers = [document.getElementById('a'), document.getElementById('b')];
+let front = 0, rotation = 0, lastUrl = null;
+
+function layout() {
+  // Fill the screen; when rotated 90/270 swap width and height.
+  const vw = innerWidth, vh = innerHeight;
+  const sideways = rotation % 180 !== 0;
+  const w = sideways ? vh : vw, h = sideways ? vw : vh;
+  stage.style.width = w + 'px';
+  stage.style.height = h + 'px';
+  stage.style.transform = `translate(-50%, -50%) rotate(${rotation}deg)`;
+}
+addEventListener('resize', layout);
+layout();
+
+function show(url, seconds) {
+  if (url === lastUrl) return;
+  lastUrl = url;
+  const next = layers[1 - front], cur = layers[front];
+  const img = new Image();
+  img.onload = () => {
+    next.style.transitionDuration = seconds + 's';
+    cur.style.transitionDuration = seconds + 's';
+    next.src = url;
+    requestAnimationFrame(() => { next.classList.add('on'); cur.classList.remove('on'); });
+    front = 1 - front;
+  };
+  img.src = url;
+}
+
+function blank(seconds = 20) {
+  lastUrl = null;
+  layers.forEach(l => { l.style.transitionDuration = seconds + 's'; l.classList.remove('on'); });
+}
+
+function connect() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'config') { rotation = m.rotation || 0; layout(); }
+    else if (m.type === 'show') show(m.url, m.crossfade ?? 20);
+    else if (m.type === 'blank') blank();
+  };
+  const ping = setInterval(() => ws.readyState === 1 && ws.send('ping'), 30000);
+  ws.onclose = () => { clearInterval(ping); setTimeout(connect, 3000); };  // server restarts are fine
+}
+connect();
+</script>
+</body>
+</html>

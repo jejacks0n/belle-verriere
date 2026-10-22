@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14110f">
+<title>Stained Window</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #14110f; --panel: #1d1916; --panel-2: #26211d; --line: #3a322b;
+  --text: #f1e9df; --muted: #a8998a; --gold: #e0a64b; --ruby: #c2414b; --cobalt: #3d6fd6; --emerald: #2f9e72;
+  --radius: 14px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 Inter, system-ui, sans-serif;
+       padding: 0 16px calc(32px + env(safe-area-inset-bottom)); max-width: 720px; margin-inline: auto; }
+h1 { font: 600 30px/1.1 "Cormorant Garamond", Georgia, serif; margin: 22px 0 4px; letter-spacing: .3px; }
+h1 span { background: linear-gradient(90deg, var(--ruby), var(--gold), var(--emerald), var(--cobalt));
+          -webkit-background-clip: text; background-clip: text; color: transparent; }
+h2 { font: 600 21px/1.2 "Cormorant Garamond", Georgia, serif; margin: 0; }
+.sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+section, details { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin: 14px 0; }
+details > section { background: transparent; }
+details > summary, section > .head { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::after { content: "›"; color: var(--muted); font-size: 22px; transition: transform .2s; }
+details[open] > summary::after { transform: rotate(90deg); }
+.body { padding: 0 16px 16px; }
+
+/* now showing */
+.now { display: grid; grid-template-columns: 112px 1fr; gap: 14px; padding: 16px; align-items: start; }
+.now img { width: 112px; aspect-ratio: 9/16; object-fit: cover; border-radius: 8px; background: #000; border: 1px solid var(--line); }
+.status { font-weight: 600; }
+.status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); margin-right: 6px; vertical-align: 1px; }
+.status.err .dot { background: var(--ruby); }
+.prompt-text { color: var(--muted); font-size: 13px; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.actions { padding: 0 16px 16px; }
+
+button { font: 600 14px Inter, sans-serif; color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 14px; min-height: 42px; cursor: pointer; }
+button:active { transform: translateY(1px); }
+button.primary { background: var(--gold); color: #1b1408; border-color: transparent; }
+button.ghost { background: transparent; }
+button[disabled] { opacity: .5; }
+
+label.field { display: block; margin: 14px 0 0; }
+label.field > .lbl { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+label.field > .lbl b { color: var(--text); font-weight: 600; }
+.hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+textarea, input[type=text], input[type=number], select {
+  width: 100%; font: 15px Inter, sans-serif; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; }
+textarea { min-height: 76px; resize: vertical; }
+progress { width: 100%; height: 6px; accent-color: var(--gold); }
+input[type=range] { width: 100%; accent-color: var(--gold); height: 28px; }
+.switch { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; gap: 12px; }
+.switch input { width: 46px; height: 26px; accent-color: var(--gold); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+.chip i { font-style: normal; color: var(--muted); margin-right: 4px; }
+.chip.changed { border-color: var(--gold); }
+
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.gallery button { padding: 0; min-height: 0; border-radius: 8px; overflow: hidden; position: relative; aspect-ratio: 9/16; }
+.gallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery .star { position: absolute; top: 4px; right: 6px; color: var(--gold); text-shadow: 0 0 4px #000; }
+
+.presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.presets button { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; padding: 10px; }
+.presets button span { font-weight: 400; font-size: 12px; color: var(--muted); line-height: 1.3; }
+.presets button.on { border-color: var(--gold); background: #2c241b; }
+@media (max-width: 420px) { .presets { grid-template-columns: 1fr; } }
+.lora { display: grid; grid-template-columns: 1fr 72px 40px; gap: 8px; align-items: center; margin-top: 8px; }
+.savebar { position: sticky; bottom: 12px; display: none; gap: 8px; background: var(--panel-2); border: 1px solid var(--gold);
+  border-radius: 12px; padding: 10px; margin-top: 14px; align-items: center; justify-content: space-between; }
+.savebar.show { display: flex; }
+
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 0;
+  width: min(560px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.6); }
+dialog img { width: 100%; max-height: 55vh; object-fit: contain; background: #000; display: block; }
+dialog .body { padding: 14px 16px 16px; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line);
+  padding: 10px 14px; border-radius: 10px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<h1><span>Stained</span> Window</h1>
+<div class="sub" id="backend">connecting…</div>
+
+<!-- NOW SHOWING -->
+<section>
+  <div class="now">
+    <img id="nowImg" alt="Current window">
+    <div>
+      <div class="status" id="status"><span class="dot"></span>…</div>
+      <div class="hint" id="timing"></div>
+      <progress id="genProg" hidden></progress>
+      <div class="prompt-text" id="nowPrompt"></div>
+    </div>
+  </div>
+  <div class="actions row">
+    <button class="primary" id="btnNext">Next now</button>
+    <button id="btnPause">Pause</button>
+    <button id="btnStar">☆ Star</button>
+    <button class="ghost" id="btnCalib">Test pattern</button>
+  </div>
+</section>
+
+<!-- PROMPT -->
+<section>
+  <div class="head"><h2>The idea</h2></div>
+  <div class="body">
+    <label class="field"><div class="lbl">What should the window show?</div>
+      <textarea id="base_prompt"></textarea></label>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="btnApplyPrompt">Start from this</button>
+      <button id="btnResetDrift">Return to original</button>
+    </div>
+    <div class="hint" style="margin-top:12px">Where the drift has taken it (gold = changed from your original):</div>
+    <div class="chips" id="slots"></div>
+  </div>
+</section>
+
+<!-- DRIFT -->
+<details open><summary><h2>Drift</h2></summary><section style="margin:0;border:0">
+  <div class="body">
+    <div class="switch"><span>Let the prompt drift</span><input type="checkbox" data-key="drift_enabled"></div>
+    <label class="field"><div class="lbl">How far each step wanders <b data-out="drift"></b></div>
+      <input type="range" min="0" max="1" step="0.05" data-key="drift">
+      <div class="hint">Left: a neighboring color or pose. Right: surprising leaps.</div></label>
+    <label class="field"><div class="lbl">Rules for the drift</div>
+      <textarea data-key="drift_guidance" placeholder="e.g. Settings stay bright and sunlit, never dark or at night."></textarea>
+      <div class="hint">The language model follows these when it rewrites the prompt.</div></label>
+    <div class="field" style="margin-top:14px"><div class="lbl hint">What can drift</div>
+      <div class="chips" id="driftSlots"></div>
+      <div class="hint">Unchecked parts stay as they are.</div></div>
+    <label class="field"><div class="lbl">Pull back toward the original <b data-out="tether"></b></div>
+      <input type="range" min="0" max="1" step="0.05" data-key="tether"></label>
+    <label class="field"><div class="lbl">Change the prompt every <b data-out="mutate_every"></b></div>
+      <input type="range" min="1" max="8" step="1" data-key="mutate_every" data-unit="image(s)"></label>
+    <label class="field"><div class="lbl">Language model (Ollama)</div>
+      <select data-key="llm_model" id="llmSelect"></select>
+      <div class="hint" id="llmHint"></div></label>
+  </div></section></details>
+
+<!-- TIMING -->
+<details open><summary><h2>Timing</h2></summary><section style="margin:0;border:0">
+  <div class="body">
+    <label class="field"><div class="lbl">Each window stays up for <b data-out="display_seconds"></b></div>
+      <input type="range" min="60" max="7200" step="60" data-key="display_seconds" data-fmt="minutes"></label>
+    <label class="field"><div class="lbl">Crossfade <b data-out="crossfade_seconds"></b></div>
+      <input type="range" min="0" max="120" step="1" data-key="crossfade_seconds" data-unit="s"></label>
+    <div class="hint" id="genTime"></div>
+  </div></section></details>
+
+<!-- GLASS -->
+<details open><summary><h2>The glass</h2></summary><section style="margin:0;border:0">
+  <div class="body">
+    <div class="presets" id="presets">
+      <button data-preset="painted"><b>Painted</b><span>the model's painting, lightly leaded</span></button>
+      <button data-preset="between"><b>Painted glass</b><span>painterly shards, real lead</span></button>
+      <button data-preset="classic"><b>Classic</b><span>flat panes in a gothic window</span></button>
+    </div>
+    <div class="hint" style="margin-top:10px">Fine-tune below. Changes preview live on the window; keep them with the bar that appears.</div>
+    <label class="field"><div class="lbl">Window frame</div>
+      <select data-key="frame" data-glass>
+        <option value="lancet">Gothic lancet</option><option value="rose">Lancet with rose</option>
+        <option value="triptych">Three lancets</option><option value="tiffany">Tiffany border</option>
+        <option value="none">No frame</option></select></label>
+    <label class="field"><div class="lbl">Trace the painted lead lines <b data-out="trace_leads"></b></div>
+      <input type="range" min="0" max="1" step="0.05" data-key="trace_leads" data-glass>
+      <div class="hint">Deepens the lines the model drew between shards into solid lead.</div></label>
+    <label class="field"><div class="lbl">Smooth each shard <b data-out="shard_smoothing"></b></div>
+      <input type="range" min="0" max="1" step="0.05" data-key="shard_smoothing" data-glass>
+      <div class="hint">Evens out brushwork inside each piece so it reads as one piece of glass.</div></label>
+    <label class="field"><div class="lbl">Re-cut into flat panes <b data-out="glass_strength"></b></div>
+      <input type="range" min="0" max="1" step="0.05" data-key="glass_strength" data-glass>
+      <div class="hint">Classic church glass: a small palette with lead on every boundary. Loses painterly detail.</div></label>
+    <div class="grid2">
+      <label class="field"><div class="lbl">Colors <b data-out="colors"></b></div>
+        <input type="range" min="4" max="48" step="1" data-key="colors" data-glass></label>
+      <label class="field"><div class="lbl">Pane size <b data-out="cell_smoothing"></b></div>
+        <input type="range" min="3" max="21" step="2" data-key="cell_smoothing" data-glass></label>
+      <label class="field"><div class="lbl">Lead width <b data-out="lead_width"></b></div>
+        <input type="range" min="1" max="15" step="1" data-key="lead_width" data-glass data-unit="px"></label>
+      <label class="field"><div class="lbl">Glass texture <b data-out="texture"></b></div>
+        <input type="range" min="0" max="1" step="0.05" data-key="texture" data-glass></label>
+      <label class="field"><div class="lbl">Saturation <b data-out="saturation"></b></div>
+        <input type="range" min="0.5" max="2.5" step="0.05" data-key="saturation" data-glass></label>
+      <label class="field"><div class="lbl">Contrast <b data-out="contrast"></b></div>
+        <input type="range" min="0.6" max="2" step="0.05" data-key="contrast" data-glass></label>
+    </div>
+    <div class="switch"><span>Iron saddle bars</span><input type="checkbox" data-key="saddle_bars" data-glass></div>
+    <div class="savebar" id="savebar"><span>Keep this look?</span>
+      <div class="row"><button class="ghost" id="btnRevert">Revert</button><button class="primary" id="btnKeep">Keep</button></div></div>
+  </div></section></details>
+
+<!-- STYLE & MODEL -->
+<details><summary><h2>Style &amp; model</h2></summary><section style="margin:0;border:0">
+  <div class="body">
+    <label class="field"><div class="lbl">Style (never drifts)</div><textarea data-key="style_prompt"></textarea></label>
+    <label class="field"><div class="lbl">Model (Hugging Face repo or local folder)</div><input type="text" data-key="model_path"></label>
+    <div class="grid2">
+      <label class="field"><div class="lbl">Steps (no ControlNet) <b data-out="steps"></b></div>
+        <input type="range" min="4" max="20" step="1" data-key="steps"></label>
+      <label class="field"><div class="lbl">Quantize</div>
+        <select data-key="quantize"><option value="">Already quantized</option><option value="8">8-bit</option><option value="4">4-bit</option></select></label>
+      <label class="field"><div class="lbl">Generate width</div><input type="number" step="16" data-key="gen_width"></label>
+      <label class="field"><div class="lbl">Generate height</div><input type="number" step="16" data-key="gen_height"></label>
+    </div>
+    <div class="switch"><span>Float16 compute (faster on M1)</span><input type="checkbox" data-key="float16_compute"></div>
+    <label class="field"><div class="lbl">Fit the picture to the window shape <b data-out="shape_strength"></b></div>
+      <input type="range" min="0" max="0.05" step="0.01" data-key="shape_strength">
+      <div class="hint">0 is off. 0.03 nudges the picture toward the shape and stays sharp; higher starts to blur. No effect with "No frame" or ControlNet on.</div></label>
+    <div class="switch"><span>Shape the picture to the frame (ControlNet, slower)</span><input type="checkbox" data-key="use_controlnet"></div>
+    <label class="field"><div class="lbl">Frame influence <b data-out="controlnet_strength"></b></div>
+      <input type="range" min="0.3" max="1" step="0.05" data-key="controlnet_strength"></label>
+    <label class="field"><div class="lbl">ControlNet steps <b data-out="controlnet_steps"></b></div>
+      <input type="range" min="6" max="28" step="1" data-key="controlnet_steps">
+      <div class="hint">About 20 is clean; fewer is faster but softer.</div></label>
+    <div class="lbl" style="margin-top:16px;color:var(--muted);font-size:13px">LoRAs (repo id or .safetensors path, strength)</div>
+    <div id="loras"></div>
+    <div class="row" style="margin-top:8px"><button id="btnAddLora">Add LoRA</button><button class="primary" id="btnSaveLoras">Save LoRAs</button></div>
+  </div></section></details>
+
+<!-- DAYLIGHT & DISPLAY -->
+<details><summary><h2>Daylight &amp; display</h2></summary><section style="margin:0;border:0">
+  <div class="body">
+    <div class="switch"><span>Sleep at night</span><input type="checkbox" data-key="daylight_only"></div>
+    <div class="grid2">
+      <label class="field"><div class="lbl">Latitude</div><input type="number" step="0.0001" data-key="latitude"></label>
+      <label class="field"><div class="lbl">Longitude</div><input type="number" step="0.0001" data-key="longitude"></label>
+    </div>
+    <div class="hint" id="sun"></div>
+    <div class="switch"><span>Shift colors with the time of day</span><input type="checkbox" data-key="time_of_day_palette"></div>
+    <label class="field"><div class="lbl">Rotate the display page</div>
+      <select data-key="display_rotation"><option value="0">0°</option><option value="90">90°</option>
+        <option value="180">180°</option><option value="270">270°</option></select>
+      <div class="hint">Use this only if the image isn't upright after setting rotation in macOS Displays.</div></label>
+  </div></section></details>
+
+<!-- HISTORY -->
+<section>
+  <div class="head"><h2>History</h2><button class="ghost" id="btnStarredOnly">Starred only</button></div>
+  <div class="body"><div class="gallery" id="gallery"></div></div>
+</section>
+
+<dialog id="detail">
+  <img id="dImg" alt="">
+  <div class="body">
+    <div class="hint" id="dMeta"></div>
+    <div class="prompt-text" id="dPrompt" style="-webkit-line-clamp: unset"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="dShow">Show now</button>
+      <button id="dRestart">Drift from here</button>
+      <button id="dStar">☆</button>
+      <button class="ghost" id="dClose">Close</button>
+    </div>
+  </div>
+</dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let S = {}, ST = {}, savedGlass = null, starredOnly = false, detailId = null;
+
+const api = (path, body) => fetch(path, body === undefined ? {} : {
+  method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+}).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e.detail || r.statusText)));
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200); }
+
+function fmt(key, el, v) {
+  if (el.dataset.fmt === 'minutes') { const m = v / 60; return m >= 60 ? `${(m/60).toFixed(m % 60 ? 1 : 0)} h` : `${m} min`; }
+  const unit = el.dataset.unit ? ' ' + el.dataset.unit : '';
+  return (typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : v) + unit;
+}
+
+function readInput(el) {
+  if (el.type === 'checkbox') return el.checked;
+  if (el.type === 'range' || el.type === 'number') return el.value === '' ? null : Number(el.value);
+  if (el.dataset.key === 'quantize') return el.value === '' ? null : Number(el.value);
+  if (el.dataset.key === 'display_rotation') return Number(el.value);
+  return el.value;
+}
+
+function fill(settings) {
+  S = settings;
+  document.querySelectorAll('[data-key]').forEach(el => {
+    if (document.activeElement === el) return;
+    const v = S[el.dataset.key];
+    if (el.type === 'checkbox') el.checked = !!v;
+    else if (el.tagName === 'SELECT' && el.dataset.key === 'llm_model') ensureOption(el, v);
+    else el.value = v ?? '';
+    const out = document.querySelector(`[data-out="${el.dataset.key}"]`);
+    if (out) out.textContent = fmt(el.dataset.key, el, v);
+  });
+  if (document.activeElement !== $('base_prompt')) $('base_prompt').value = S.base_prompt;
+  renderLoras();
+  $('driftSlots').querySelectorAll('input').forEach(c => c.checked = (S.drift_slots || []).includes(c.value));
+  document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('on', b.dataset.preset === S.preset));
+}
+
+function ensureOption(sel, v) {
+  if (v && ![...sel.options].some(o => o.value === v)) sel.add(new Option(v + ' (not installed?)', v));
+  sel.value = v;
+}
+
+function renderStatus(st) {
+  ST = st;
+  $('backend').textContent = st.backend === 'mock' ? 'test mode: fake images' : 'Z-Image Turbo on this Mac';
+  const s = $('status');
+  s.className = 'status' + (st.status === 'error' ? ' err' : '');
+  s.innerHTML = '<span class="dot"></span>' + (st.status === 'error' ? 'Error: ' + st.error : st.status);
+  const parts = [];
+  if (st.seconds_left != null) parts.push(`next in ${Math.floor(st.seconds_left/60)}:${String(st.seconds_left%60).padStart(2,'0')}`);
+  if (st.pending) parts.push('next one ready');
+  const gen = st.gen_elapsed != null, p = $('genProg');
+  if (gen) parts.unshift(`${st.gen_step ? `step ${st.gen_step}/${st.gen_steps} · ` : ''}${Math.floor(st.gen_elapsed/60)}:${String(st.gen_elapsed%60).padStart(2,'0')}`
+    + (st.last_gen_seconds ? ` (last took ${Math.round(st.last_gen_seconds)}s)` : ''));
+  p.hidden = !gen;
+  if (gen && st.gen_step) { p.max = st.gen_steps; p.value = st.gen_step; } else p.removeAttribute('value');
+  $('timing').textContent = parts.join(' · ');
+  if (st.current) {
+    $('nowImg').src = `/images/${st.current.file}?v=${st.current.v || 0}`;
+    $('nowPrompt').textContent = st.current.prompt;
+    $('btnStar').textContent = st.current.starred ? '★ Starred' : '☆ Star';
+  }
+  $('btnPause').textContent = S.paused ? 'Resume' : 'Pause';
+  $('genTime').textContent = st.last_gen_seconds ? `Last image took ${st.last_gen_seconds}s to generate.` : '';
+  const d = st.daylight || {};
+  $('sun').textContent = d.sunrise ? `Sunrise ${d.sunrise} · sunset ${d.sunset}${d.awake ? '' : ' · sleeping'}` : 'Set a location to use real sunrise and sunset times.';
+  $('llmHint').textContent = st.llm_error ? 'Ollama not reachable: using a simple word-bank drift instead.' : '';
+  const slots = st.prompt_slots || {}, orig = st.original_slots || {};
+  $('slots').innerHTML = Object.entries(slots).filter(([,v]) => v).map(([k, v]) =>
+    `<span class="chip ${orig[k] !== v ? 'changed' : ''}"><i>${k}</i>${esc(v)}</span>`).join('');
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function refresh() {
+  const st = await api('/api/state');
+  fill(st.settings); renderStatus(st);
+}
+
+async function save(changes, msg) {
+  const r = await api('/api/settings', changes);
+  fill(r.settings);
+  if (msg) toast(msg);
+}
+
+// generic inputs (non-glass save immediately)
+let glassTimer = null;
+document.querySelectorAll('[data-key]').forEach(el => {
+  const key = el.dataset.key;
+  if (key === 'base_prompt') return;
+  const ev = (el.tagName === 'TEXTAREA' || el.type === 'text' || el.type === 'number') ? 'change' : (el.type === 'range' ? 'input' : 'change');
+  el.addEventListener(ev, () => {
+    const v = readInput(el);
+    const out = document.querySelector(`[data-out="${key}"]`);
+    if (out) out.textContent = fmt(key, el, v);
+    if (el.hasAttribute('data-glass')) {
+      if (!savedGlass) savedGlass = {...glassValues()};
+      $('savebar').classList.add('show');
+      clearTimeout(glassTimer);
+      glassTimer = setTimeout(() => api('/api/preview', glassValues()).catch(e => toast(e)), 350);
+    } else if (el.type === 'range') {
+      clearTimeout(el._t); el._t = setTimeout(() => save({[key]: v}), 400);
+    } else save({[key]: v}, 'Saved');
+  });
+});
+$('driftSlots').innerHTML = ['subject', 'action', 'setting', 'palette', 'motif', 'mood'].map(k =>
+  `<label class="chip"><input type="checkbox" value="${k}"> ${k}</label>`).join('');
+$('driftSlots').onchange = () => save({drift_slots: [...$('driftSlots').querySelectorAll('input:checked')].map(c => c.value)}, 'Saved');
+function glassValues() {
+  const o = {}; document.querySelectorAll('[data-glass]').forEach(el => o[el.dataset.key] = readInput(el)); return o;
+}
+$('btnKeep').onclick = async () => { await save(glassValues(), 'Look saved'); savedGlass = null; $('savebar').classList.remove('show'); };
+$('btnRevert').onclick = async () => {
+  fill(S); $('savebar').classList.remove('show'); savedGlass = null;
+  if (ST.current) api('/api/action/show', {id: ST.current.id});
+};
+
+document.querySelectorAll('[data-preset]').forEach(b => b.onclick = async () => {
+  await api('/api/action/preset', {name: b.dataset.preset});
+  savedGlass = null; $('savebar').classList.remove('show');
+  await refresh(); toast(b.querySelector('b').textContent + ' look applied');
+});
+$('btnApplyPrompt').onclick = () => save({base_prompt: $('base_prompt').value.trim()}, 'New idea: the next window will start from it');
+$('btnResetDrift').onclick = () => api('/api/action/reset_drift', {}).then(() => toast('Back to the original idea'));
+$('btnNext').onclick = () => api('/api/action/next', {}).then(() => toast(ST.pending ? 'Fading to the next one' : 'Will show as soon as it’s ready'));
+$('btnPause').onclick = () => api('/api/action/' + (S.paused ? 'resume' : 'pause'), {}).then(refresh);
+$('btnStar').onclick = () => ST.current && api('/api/action/star', {id: ST.current.id, value: !ST.current.starred}).then(() => { refresh(); loadGallery(); });
+$('btnCalib').onclick = () => api('/api/action/calibrate', {}).then(() => toast('Test pattern on the window. Press Next or pick a history image to leave.'));
+
+// LoRAs
+function renderLoras() {
+  if ($('loras').contains(document.activeElement)) return;
+  $('loras').innerHTML = (S.loras || []).map((l, i) => `
+    <div class="lora" data-i="${i}">
+      <input type="text" value="${esc(l.path)}" placeholder="user/repo or /path/file.safetensors">
+      <input type="number" step="0.05" min="0" max="2" value="${l.scale}">
+      <input type="checkbox" ${l.enabled ? 'checked' : ''} title="enabled">
+    </div>`).join('') || '<div class="hint">None yet.</div>';
+}
+function readLoras() {
+  return [...document.querySelectorAll('#loras .lora')].map(r => {
+    const [p, sc, en] = r.querySelectorAll('input');
+    return {path: p.value.trim(), scale: Number(sc.value) || 0.8, enabled: en.checked};
+  }).filter(l => l.path);
+}
+$('btnAddLora').onclick = () => { S.loras = [...readLoras(), {path: '', scale: 0.8, enabled: true}]; renderLoras(); };
+$('btnSaveLoras').onclick = () => save({loras: readLoras()}, 'LoRAs saved: the model reloads before the next image');
+
+// LLM list
+api('/api/llm_models').then(models => {
+  const sel = $('llmSelect'); sel.innerHTML = '';
+  models.forEach(m => sel.add(new Option(m, m)));
+  ensureOption(sel, S.llm_model);
+  if (!models.length) $('llmHint').textContent = 'No Ollama models found. Install one with: ollama pull llama3.1:8b';
+});
+
+// gallery
+async function loadGallery() {
+  const items = await api(`/api/history?limit=90&starred=${starredOnly}`);
+  $('gallery').innerHTML = items.map(e => `<button data-id="${e.id}"><img loading="lazy" src="/images/${e.file}?v=${e.v||0}" alt="">${e.starred ? '<span class="star">★</span>' : ''}</button>`).join('')
+    || '<div class="hint">Nothing yet.</div>';
+  $('gallery').querySelectorAll('button').forEach(b => b.onclick = () => openDetail(items.find(e => e.id === b.dataset.id)));
+}
+$('btnStarredOnly').onclick = () => { starredOnly = !starredOnly; $('btnStarredOnly').textContent = starredOnly ? 'Show all' : 'Starred only'; loadGallery(); };
+function openDetail(e) {
+  detailId = e.id;
+  $('dImg').src = `/images/${e.file}?v=${e.v||0}`;
+  $('dMeta').textContent = `${e.time} · seed ${e.seed} · ${e.gen_seconds}s`;
+  $('dPrompt').textContent = e.prompt;
+  $('dStar').textContent = e.starred ? '★' : '☆';
+  $('detail').showModal();
+}
+$('dClose').onclick = () => $('detail').close();
+$('dShow').onclick = () => api('/api/action/show', {id: detailId}).then(() => { $('detail').close(); toast('On the window'); });
+$('dRestart').onclick = () => api('/api/action/restart_from', {id: detailId}).then(() => { $('detail').close(); toast('The drift continues from this one'); });
+$('dStar').onclick = async () => {
+  const on = $('dStar').textContent === '☆';
+  await api('/api/action/star', {id: detailId, value: on}); $('dStar').textContent = on ? '★' : '☆'; loadGallery();
+};
+
+// live updates
+function connect() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'status') renderStatus(m);
+    if (m.type === 'show' && m.entry) loadGallery();
+  };
+  ws.onclose = () => setTimeout(connect, 3000);
+}
+refresh().then(loadGallery);
+connect();
+setInterval(() => {
+  let tick = false;
+  if (ST.seconds_left > 0) { ST.seconds_left--; tick = true; }
+  if (ST.gen_elapsed != null) { ST.gen_elapsed++; tick = true; }
+  if (tick) renderStatus(ST);
+}, 1000);
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>
