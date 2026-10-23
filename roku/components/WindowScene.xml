@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window: the same crossfading display as static/display.html, for a Roku. -->
+<component name="WindowScene" extends="Scene">
+  <children>
+    <Poster id="a" loadDisplayMode="scaleToFit" opacity="0" />
+    <Poster id="b" loadDisplayMode="scaleToFit" opacity="0" />
+    <Label id="hint" translation="[80, 980]" color="0x666666FF" />
+    <Animation id="fadeIn" repeat="false" easeFunction="inOutQuad">
+      <FloatFieldInterpolator id="inInterp" key="[0.0, 1.0]" keyValue="[0.0, 1.0]" />
+    </Animation>
+    <Animation id="fadeOut" repeat="false" easeFunction="inOutQuad">
+      <FloatFieldInterpolator id="outInterp" key="[0.0, 1.0]" keyValue="[1.0, 0.0]" />
+    </Animation>
+  </children>
+  <script type="text/brightscript"><![CDATA[
+sub init()
+    m.top.backgroundUri = ""
+    m.top.backgroundColor = "0x000000FF"
+    m.posters = [m.top.findNode("a"), m.top.findNode("b")]
+    m.front = 0
+    m.lastUrl = ""
+    m.crossfade = 3
+    m.fadeIn = m.top.findNode("fadeIn")
+    m.fadeOut = m.top.findNode("fadeOut")
+    m.inInterp = m.top.findNode("inInterp")
+    m.outInterp = m.top.findNode("outInterp")
+    m.server = CreateObject("roAppInfo").GetValue("server_url")
+    m.top.findNode("hint").text = "Waiting for " + m.server
+    layout(0)
+    for each p in m.posters
+        p.observeField("loadStatus", "onLoaded")
+    end for
+    m.task = CreateObject("roSGNode", "PollTask")
+    m.task.server = m.server
+    m.task.observeField("state", "onState")
+    m.task.control = "RUN"
+end sub
+
+' Fill the screen. For 90/270 the poster is portrait-sized and turned (positive rotation is
+' counter-clockwise on Roku, clockwise on the web page, hence the minus).
+sub layout(degrees as integer)
+    m.rotation = degrees
+    for each p in m.posters
+        if degrees mod 180 = 0
+            p.width = 1920
+            p.height = 1080
+            p.translation = [0, 0]
+        else
+            p.width = 1080
+            p.height = 1920
+            p.translation = [420, -420]
+        end if
+        p.scaleRotateCenter = [p.width / 2, p.height / 2]
+        p.rotation = -degrees * 3.14159265 / 180
+    end for
+end sub
+
+sub onState()
+    s = m.task.state
+    if s.rotation <> invalid and s.rotation <> m.rotation then layout(s.rotation)
+    if s.crossfade <> invalid then m.crossfade = s.crossfade
+    if s["type"] = "blank"
+        m.lastUrl = ""
+        fade(invalid, m.posters[m.front], 20)
+    else if s["type"] = "show" and s.url <> m.lastUrl
+        m.lastUrl = s.url
+        back = m.posters[1 - m.front]
+        back.uri = ""
+        back.uri = m.server + s.url   ' onLoaded fades it in once it has loaded
+    end if
+end sub
+
+sub onLoaded(event as object)
+    p = event.getRoSGNode()
+    back = m.posters[1 - m.front]
+    if p.loadStatus <> "ready" or not p.isSameNode(back) then return
+    m.top.findNode("hint").visible = false
+    fade(back, m.posters[m.front], m.crossfade)
+    m.front = 1 - m.front
+end sub
+
+' Fades start from each poster's current opacity, so nothing flashes back after going blank.
+sub fade(incoming as dynamic, outgoing as object, seconds as dynamic)
+    if seconds < 0.1 then seconds = 0.1
+    m.fadeIn.control = "stop"
+    m.fadeOut.control = "stop"
+    if incoming <> invalid
+        m.inInterp.fieldToInterp = incoming.id + ".opacity"
+        m.inInterp.keyValue = [incoming.opacity, 1.0]
+        m.fadeIn.duration = seconds
+        m.fadeIn.control = "start"
+    end if
+    m.outInterp.fieldToInterp = outgoing.id + ".opacity"
+    m.outInterp.keyValue = [outgoing.opacity, 0.0]
+    m.fadeOut.duration = seconds
+    m.fadeOut.control = "start"
+end sub
+  ]]></script>
+</component>

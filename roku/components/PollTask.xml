@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Asks the server what the window should show, every few seconds, and publishes changes. -->
+<component name="PollTask" extends="Task">
+  <interface>
+    <field id="server" type="string" />
+    <field id="state" type="assocarray" />
+  </interface>
+  <script type="text/brightscript"><![CDATA[
+sub init()
+    m.top.functionName = "poll"
+end sub
+
+sub poll()
+    http = CreateObject("roUrlTransfer")
+    http.SetUrl(m.top.server + "/api/display")
+    last = ""
+    while true
+        body = http.GetToString()
+        if body <> "" and body <> last
+            data = ParseJson(body)
+            if data <> invalid
+                m.top.state = data
+                last = body
+            end if
+        end if
+        sleep(3000)
+    end while
+end sub
+  ]]></script>
+</component>
