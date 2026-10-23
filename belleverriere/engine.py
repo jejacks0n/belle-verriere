@@ -6,7 +6,7 @@ import random
 import threading
 import time
 import traceback
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Callable
 
@@ -14,9 +14,9 @@ from PIL import Image
 
 from . import daylight
 from . import settings as settings_mod
-from .drift import Drifter, PromptState, compose
+from .drift import Drifter, PromptState, compose, describe
 from .generator import GenRequest
-from .glass import calibration, make_glass
+from .glass import make_glass
 from .settings import DATA_DIR, Settings
 
 IMAGES_DIR = DATA_DIR / "images"
@@ -52,6 +52,8 @@ class Engine:
         self.gen_started: float | None = None  # set while an image is generating
         self.gen_step = (0, 0)                 # (done, total) denoise steps
         self.epoch = 0                        # bumped when queued work becomes stale
+        self.invented: list[str] = []         # recent "Surprise me" ideas, so they don't repeat
+        self.recent_poses: list[str] = []
 
         IMAGES_DIR.mkdir(parents=True, exist_ok=True)
         self.history: list[dict] = self._load_history()
@@ -144,10 +146,13 @@ class Engine:
             self._show(e)
 
     def restart_from(self, entry_id: str):
-        """Continue drifting from an earlier image's prompt."""
+        """Make an earlier image's prompt the new starting point: it becomes the idea, the anchor
+        the drift is pulled back to, and exactly what the next image is made from."""
         with self.lock:
-            e = self._find(entry_id)
-            self.prompt.current = dict(e["slots"])
+            slots = dict(self._find(entry_id)["slots"])
+            self.settings = replace(self.settings, base_prompt=describe(slots))
+            settings_mod.save(self.settings)
+            self.prompt = PromptState(dict(slots), dict(slots), 0, [slots["subject"]] if slots.get("subject") else [])
             self._save_prompt_state()
             self._discard_pending()
         self.wake.set()
@@ -159,17 +164,28 @@ class Engine:
             self._discard_pending()
         self.wake.set()
 
+    def invent(self) -> dict[str, str]:
+        """Ask the LLM for a fresh idea and drift rules (doesn't apply them)."""
+        idea = self.drifter.invent(self.rnd, self.invented)
+        self.invented = (self.invented + [idea["idea"]])[-8:]
+        return idea
+
     def star(self, entry_id: str, value: bool):
         with self.lock:
             self._find(entry_id)["starred"] = value
             self._save_history()
 
-    def show_calibration(self):
-        s = self.settings
-        img = calibration(s.out_width, s.out_height, s.frame, s.lead_width)
-        img.save(IMAGES_DIR / "calibration.png")
-        self.emit({"type": "show", "url": f"/images/calibration.png?t={int(time.time())}",
-                   "crossfade": 2, "entry": None})
+    def delete(self, entry_id: str):
+        """Remove an image and its files for good. The one on the window can't be deleted."""
+        with self.lock:
+            e = self._find(entry_id)
+            if e is self.current:
+                raise ValueError("That image is on the window right now")
+            for f in (e["file"], e.get("raw")):
+                if f:
+                    (IMAGES_DIR / f).unlink(missing_ok=True)
+            self.history.remove(e)
+            self._save_history()
 
     def _find(self, entry_id: str) -> dict:
         for e in self.history:
@@ -242,7 +258,15 @@ class Engine:
         if subj and (not ps.recent_subjects or ps.recent_subjects[-1] != subj):
             ps.recent_subjects = (ps.recent_subjects + [subj])[-12:]
         self._save_prompt_state()
-        return dict(ps.current), compose(ps.current, s.style_prompt, daylight.time_hint(s), s.frame)
+        return dict(ps.current), compose(ps.current, s.style_prompt, daylight.time_hint(s), s.frame,
+                                         self._next_pose() if s.vary_pose else None)
+
+    def _next_pose(self) -> str:
+        """A pose and framing not used in the last few images."""
+        from .drift import FRAMINGS, POSES
+        pose = self.rnd.choice([p for p in POSES if p not in self.recent_poses])
+        self.recent_poses = (self.recent_poses + [pose])[-8:]
+        return f"{pose}, {self.rnd.choice(FRAMINGS)}"
 
     def _generate(self) -> dict | None:
         with self.lock:
@@ -261,7 +285,8 @@ class Engine:
         finally:
             self.gen_started = None
         self.last_gen_seconds = round(time.time() - t0, 1)
-        print(f"[engine] image generated in {self.last_gen_seconds}s")
+        t = round(self.last_gen_seconds)
+        print(f"[engine] image generated in {t // 60}:{t % 60:02d}")
 
         with self.lock:
             if epoch != self.epoch:

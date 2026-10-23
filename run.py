@@ -9,7 +9,7 @@ import socket
 
 import uvicorn
 
-from stainedwindow.server import create_app
+from belleverriere.server import create_app
 
 
 def lan_ip() -> str:

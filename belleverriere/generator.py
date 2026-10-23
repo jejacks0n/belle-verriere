@@ -75,6 +75,9 @@ class MfluxBackend:
         self._key = None
         self._lock = threading.Lock()
         self._hook = _StepHook()
+        # mflux's progress bars would otherwise create a multiprocessing lock, which leaks (and warns) on Ctrl-C
+        from tqdm import tqdm
+        tqdm.set_lock(threading.RLock())
         self._shape = (None, None)  # (frame, w, h) -> encoded shape picture, reused across images
 
     def _load(self, s: Settings):

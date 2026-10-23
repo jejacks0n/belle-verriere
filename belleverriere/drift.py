@@ -40,6 +40,48 @@ FALLBACK_BANK = {
 }
 
 
+# Random sparks for "Surprise me": the app picks the ingredients so a small LLM can't fall back
+# on the same safe idea every time; the LLM's job is to fuse them into one vivid concept.
+SPARKS = {
+    "tradition": ["Byzantine mosaic", "Japanese ukiyo-e", "Art Nouveau", "Art Deco", "Celtic illuminated manuscript",
+                  "Persian miniature", "Mughal painting", "Russian icon", "Mexican folk art", "Aztec codex",
+                  "Ottoman Iznik tile", "Tiffany lamp", "Viking carving", "Moorish geometry", "Mayan relief",
+                  "Indian Madhubani", "Ethiopian icon", "Chinese paper cut", "Bauhaus", "1960s psychedelic poster",
+                  "Soviet constructivism", "Pre-Raphaelite painting", "Klimt's gold period", "Mucha poster",
+                  "medieval bestiary", "Polynesian tapa", "Andean textile", "Victorian botanical plate"],
+    "subject": ["bioluminescent fungi", "clockwork birds", "a tide pool at dawn", "migrating cranes", "volcanic glass",
+                "a forgotten river goddess", "an orchard at harvest", "constellations come alive", "deep-sea creatures",
+                "jeweled beetles", "a lighthouse keeper's dream", "an aurora over ice", "alchemy and its symbols",
+                "a circus at the edge of night", "a chess game between seasons", "coral cities", "origami animals",
+                "a beekeeper and her swarm", "a desert caravan", "a cathedral of trees", "musical instruments that bloom",
+                "a fox spirit", "a cartographer's sea monsters", "moths drawn to a lantern", "a dancer mid-turn",
+                "a sleeping giantess made of hills", "storm clouds with faces", "a koi pond seen from above",
+                "a woman braiding starlight", "the anatomy of a flower", "a mermaid among shipwreck gold",
+                "a hummingbird duel", "an astronomer's tower", "snow leopards on a mountain shrine"],
+    "twist": ["two worlds meeting at a seam", "frozen at the instant of change", "seen from directly above",
+              "at an impossible scale", "told as three moments in one scene", "mirrored in perfect symmetry",
+              "seen through rippling water", "half day and half night", "everything made of one material",
+              "growing out of something unexpected", "caught in a spiral", "the small thing is the giant"],
+    "mood": ["playful", "eerie but beautiful", "triumphant", "tender", "uncanny", "euphoric", "wistful",
+             "mischievous", "serene", "electric", "sacred", "dreamlike"],
+}
+
+
+# "Vary the pose": image models fall back on one default pose unless the prompt names one, and
+# a fast model barely varies it between seeds. Each image gets one of these, picked by the engine.
+POSES = ["standing with both arms relaxed at the sides", "seated sideways with knees drawn up, arms around them",
+         "reclining on one elbow", "seen from behind, looking back over the shoulder",
+         "kneeling upright, hands resting in the lap", "mid-stride, walking toward the viewer",
+         "dancing, arms flung wide", "leaning back against a column, arms folded",
+         "holding a small lantern in both hands", "head bowed, hands clasped at the chest",
+         "turned away in profile, hair swept sideways by wind", "lying back with hair fanned out around the head",
+         "crouching, one hand touching the ground", "sitting on a ledge, legs dangling",
+         "twisting at the waist to look upward", "reaching one hand out toward the viewer",
+         "both hands cupped around a glowing light", "standing with hands on hips"]
+FRAMINGS = ["close-up of the head and shoulders", "framed from the waist up", "full length, head to toe",
+            "small within a wide scene", "seen from a low angle", "seen from slightly above"]
+
+
 @dataclass
 class PromptState:
     original: dict[str, str] = field(default_factory=dict)
@@ -48,19 +90,32 @@ class PromptState:
     recent_subjects: list[str] = field(default_factory=list)
 
 
-def compose(slots: dict[str, str], style_prompt: str, time_hint: str | None = None, frame: str = "none") -> str:
+def describe(slots: dict[str, str]) -> str:
+    """Slots back into a readable idea, for the idea box."""
+    body = ", ".join(x for x in (slots.get("subject"), slots.get("action"), slots.get("setting")) if x)
+    extras = [f"{k.capitalize()}: {slots[k]}" for k in ("palette", "motif", "mood") if slots.get(k)]
+    return ". ".join(x for x in [body, *extras] if x) + "."
+
+
+def compose(slots: dict[str, str], style_prompt: str, time_hint: str | None = None, frame: str = "none",
+            pose: str | None = None) -> str:
     from .frames import FRAME_SHAPES
     shape = FRAME_SHAPES.get(frame)
     parts = [style_prompt.strip().rstrip(".") + "."]
     body = ", ".join(x for x in (slots.get("subject"), slots.get("action"), slots.get("setting")) if x)
     if body:
         parts.append(body[0].upper() + body[1:] + ".")
+    if pose:
+        parts.append(f"Pose: {pose}.")
     if shape:  # the app draws the frame; asking for a border makes the model paint a rectangular one
-        parts.append(f"The artwork is shaped as {shape}, the glass filling it to the edges.")
+        parts.append(f"The artwork is shaped as {shape} that fills the entire image edge to edge, "
+                     "with no wall or stonework around it.")
         if slots.get("motif"):
             parts.append(f"Ornamental details of {slots['motif']} woven through the glass.")
-    elif slots.get("motif"):
-        parts.append(f"Decorative border of {slots['motif']}.")
+    else:
+        parts.append("The glass fills the entire image edge to edge.")
+        if slots.get("motif"):
+            parts.append(f"Decorative border of {slots['motif']}.")
     pal = slots.get("palette")
     if pal:
         parts.append(f"Glass colors: {pal}" + (f", {time_hint}" if time_hint else "") + ".")
@@ -129,6 +184,27 @@ class Drifter:
             for k in ("setting", "palette", "motif", "mood"):
                 slots[k] = rnd.choice(FALLBACK_BANK[k])
         return slots
+
+    def invent(self, rnd: random.Random, avoid: list[str]) -> dict[str, str]:
+        """A fresh, unusual idea plus drift rules for "Surprise me". Returns {"idea", "rules"}."""
+        sparks = {k: rnd.choice(v) for k, v in SPARKS.items()}
+        system = ("You invent concepts for a backlit stained glass window whose picture slowly drifts over hours. "
+                  "Fuse the sparks you are given into ONE specific, vivid, surprising idea: name concrete subjects, "
+                  "what they are doing, the setting and the colors. Never be generic or predictable: no plain "
+                  "landscapes, sunsets, generic angels, roses or peacocks. The scene must be bright and full of "
+                  "light, never dark, dim or at night. Do not mention stained glass, lead or "
+                  "windows; that style is applied separately. Also write 1-3 short rules for how the picture may "
+                  "drift so it stays coherent and interesting: what must stay, what may wander, and keep it "
+                  "luminous and colorful because sunlight shines through it. Reply with JSON only: "
+                  '{"idea": "1-2 sentences", "rules": "1-3 short sentences"}')
+        user = (f"Sparks: {json.dumps(sparks)}\n" +
+                (f"Ideas already used, make something clearly different: {avoid[-8:]}\n" if avoid else ""))
+        data = self._chat(system, user, temperature=1.1)
+        idea = str((data or {}).get("idea", "")).strip()
+        if idea:
+            return {"idea": idea, "rules": str(data.get("rules", "")).strip()}
+        return {"idea": f"{sparks['subject']}, {sparks['twist']}, in the manner of {sparks['tradition']}, "
+                        f"{sparks['mood']}", "rules": ""}
 
     def mutate(self, state: PromptState, drift: float, tether: float, rnd: random.Random,
                allowed: list[str] | None = None, guidance: str = "") -> dict[str, str]:

@@ -35,6 +35,7 @@ class Settings:
     drift: float = 0.35          # 0 = tiny tweaks, 1 = wild leaps
     tether: float = 0.3          # chance per mutation of pulling a slot back toward the original
     mutate_every: int = 1        # mutate the prompt every N images
+    vary_pose: bool = False      # give figures a different pose and framing every image
     drift_guidance: str = ""     # rules the drift LLM must follow, e.g. "settings stay bright"
     drift_slots: list[str] = field(default_factory=lambda: [   # which prompt parts may change
         "subject", "action", "setting", "palette", "motif", "mood"])

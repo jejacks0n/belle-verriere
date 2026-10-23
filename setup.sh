@@ -25,7 +25,7 @@ else
   echo "Ollama isn't on the PATH; prompt drift will use the simple word-bank fallback."
 fi
 
-chmod +x start.sh start-display.sh
+chmod +x start.sh
 echo
 echo "Setup done. Start it with ./start.sh"
 echo "The image model (several GB) downloads the first time it generates."

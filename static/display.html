@@ -3,10 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- added to an iPad home screen, open without Safari's bars -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Window</title>
 <style>
   /* Black is opaque on a transparent LCD, so everything outside the image is black. */
-  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
   #stage { position: fixed; top: 50%; left: 50%; transform-origin: center center; }
   .layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
            opacity: 0; transition-property: opacity; transition-timing-function: ease-in-out; }
@@ -67,6 +70,13 @@ function connect() {
   ws.onclose = () => { clearInterval(ping); setTimeout(connect, 3000); };  // server restarts are fine
 }
 connect();
+
+// Click anywhere for true full screen with no browser bars (browsers only allow it after a click).
+addEventListener('click', () => {
+  const el = document.documentElement;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement)
+    (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+});
 </script>
 </body>
 </html>

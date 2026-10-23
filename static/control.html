@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#14110f">
-<title>Stained Window</title>
+<title>Belle Verrière</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -93,8 +93,7 @@ dialog .body { padding: 14px 16px 16px; }
 </style>
 </head>
 <body>
-<h1><span>Stained</span> Window</h1>
-<div class="sub" id="backend">connecting…</div>
+<h1><span>Belle</span> Verrière</h1>
 
 <!-- NOW SHOWING -->
 <section>
@@ -111,7 +110,6 @@ dialog .body { padding: 14px 16px 16px; }
     <button class="primary" id="btnNext">Next now</button>
     <button id="btnPause">Pause</button>
     <button id="btnStar">☆ Star</button>
-    <button class="ghost" id="btnCalib">Test pattern</button>
   </div>
 </section>
 
@@ -124,6 +122,7 @@ dialog .body { padding: 14px 16px 16px; }
     <div class="row" style="margin-top:10px">
       <button class="primary" id="btnApplyPrompt">Start from this</button>
       <button id="btnResetDrift">Return to original</button>
+      <button id="btnSurprise">Surprise me</button>
     </div>
     <div class="hint" style="margin-top:12px">Where the drift has taken it (gold = changed from your original):</div>
     <div class="chips" id="slots"></div>
@@ -137,6 +136,7 @@ dialog .body { padding: 14px 16px 16px; }
     <label class="field"><div class="lbl">How far each step wanders <b data-out="drift"></b></div>
       <input type="range" min="0" max="1" step="0.05" data-key="drift">
       <div class="hint">Left: a neighboring color or pose. Right: surprising leaps.</div></label>
+    <div class="switch"><span>Give figures a new pose and framing every image</span><input type="checkbox" data-key="vary_pose"></div>
     <label class="field"><div class="lbl">Rules for the drift</div>
       <textarea data-key="drift_guidance" placeholder="e.g. Settings stay bright and sunlit, never dark or at night."></textarea>
       <div class="hint">The language model follows these when it rewrites the prompt.</div></label>
@@ -156,9 +156,9 @@ dialog .body { padding: 14px 16px 16px; }
 <details open><summary><h2>Timing</h2></summary><section style="margin:0;border:0">
   <div class="body">
     <label class="field"><div class="lbl">Each window stays up for <b data-out="display_seconds"></b></div>
-      <input type="range" min="60" max="7200" step="60" data-key="display_seconds" data-fmt="minutes"></label>
+      <input type="range" min="60" max="7200" step="60" data-key="display_seconds" data-fmt="duration"></label>
     <label class="field"><div class="lbl">Crossfade <b data-out="crossfade_seconds"></b></div>
-      <input type="range" min="0" max="120" step="1" data-key="crossfade_seconds" data-unit="s"></label>
+      <input type="range" min="0" max="120" step="1" data-key="crossfade_seconds" data-fmt="duration"></label>
     <div class="hint" id="genTime"></div>
   </div></section></details>
 
@@ -238,7 +238,7 @@ dialog .body { padding: 14px 16px 16px; }
     <div class="switch"><span>Sleep at night</span><input type="checkbox" data-key="daylight_only"></div>
     <div class="grid2">
       <label class="field"><div class="lbl">Latitude</div><input type="number" step="0.0001" data-key="latitude"></label>
-      <label class="field"><div class="lbl">Longitude</div><input type="number" step="0.0001" data-key="longitude"></label>
+      <label class="field"><div class="lbl">Longitude (west is negative)</div><input type="number" step="0.0001" data-key="longitude"></label>
     </div>
     <div class="hint" id="sun"></div>
     <div class="switch"><span>Shift colors with the time of day</span><input type="checkbox" data-key="time_of_day_palette"></div>
@@ -251,7 +251,8 @@ dialog .body { padding: 14px 16px 16px; }
 <!-- HISTORY -->
 <section>
   <div class="head"><h2>History</h2><button class="ghost" id="btnStarredOnly">Starred only</button></div>
-  <div class="body"><div class="gallery" id="gallery"></div></div>
+  <div class="body"><div class="gallery" id="gallery"></div>
+    <button class="ghost" id="btnMore" style="width:100%;margin-top:10px" hidden>Load more</button></div>
 </section>
 
 <dialog id="detail">
@@ -261,8 +262,9 @@ dialog .body { padding: 14px 16px 16px; }
     <div class="prompt-text" id="dPrompt" style="-webkit-line-clamp: unset"></div>
     <div class="row" style="margin-top:12px">
       <button class="primary" id="dShow">Show now</button>
-      <button id="dRestart">Drift from here</button>
+      <button id="dRestart">Start new drift from this</button>
       <button id="dStar">☆</button>
+      <button class="ghost" id="dDelete">Delete</button>
       <button class="ghost" id="dClose">Close</button>
     </div>
   </div>
@@ -279,8 +281,15 @@ const api = (path, body) => fetch(path, body === undefined ? {} : {
 
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200); }
 
+// every duration on this page reads as m:ss (h:mm:ss from an hour up)
+function dur(sec) {
+  sec = Math.round(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = String(sec % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}
+
 function fmt(key, el, v) {
-  if (el.dataset.fmt === 'minutes') { const m = v / 60; return m >= 60 ? `${(m/60).toFixed(m % 60 ? 1 : 0)} h` : `${m} min`; }
+  if (el.dataset.fmt === 'duration') return dur(v);
   const unit = el.dataset.unit ? ' ' + el.dataset.unit : '';
   return (typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : v) + unit;
 }
@@ -317,16 +326,15 @@ function ensureOption(sel, v) {
 
 function renderStatus(st) {
   ST = st;
-  $('backend').textContent = st.backend === 'mock' ? 'test mode: fake images' : 'Z-Image Turbo on this Mac';
   const s = $('status');
   s.className = 'status' + (st.status === 'error' ? ' err' : '');
   s.innerHTML = '<span class="dot"></span>' + (st.status === 'error' ? 'Error: ' + st.error : st.status);
   const parts = [];
-  if (st.seconds_left != null) parts.push(`next in ${Math.floor(st.seconds_left/60)}:${String(st.seconds_left%60).padStart(2,'0')}`);
+  if (st.seconds_left != null) parts.push(`next in ${dur(st.seconds_left)}`);
   if (st.pending) parts.push('next one ready');
   const gen = st.gen_elapsed != null, p = $('genProg');
-  if (gen) parts.unshift(`${st.gen_step ? `step ${st.gen_step}/${st.gen_steps} · ` : ''}${Math.floor(st.gen_elapsed/60)}:${String(st.gen_elapsed%60).padStart(2,'0')}`
-    + (st.last_gen_seconds ? ` (last took ${Math.round(st.last_gen_seconds)}s)` : ''));
+  if (gen) parts.unshift(`${st.gen_step ? `step ${st.gen_step}/${st.gen_steps} · ` : ''}${dur(st.gen_elapsed)}`
+    + (st.last_gen_seconds ? ` (last took ${dur(st.last_gen_seconds)})` : ''));
   p.hidden = !gen;
   if (gen && st.gen_step) { p.max = st.gen_steps; p.value = st.gen_step; } else p.removeAttribute('value');
   $('timing').textContent = parts.join(' · ');
@@ -336,9 +344,9 @@ function renderStatus(st) {
     $('btnStar').textContent = st.current.starred ? '★ Starred' : '☆ Star';
   }
   $('btnPause').textContent = S.paused ? 'Resume' : 'Pause';
-  $('genTime').textContent = st.last_gen_seconds ? `Last image took ${st.last_gen_seconds}s to generate.` : '';
+  $('genTime').textContent = st.last_gen_seconds ? `Last image took ${dur(st.last_gen_seconds)} to generate.` : '';
   const d = st.daylight || {};
-  $('sun').textContent = d.sunrise ? `Sunrise ${d.sunrise} · sunset ${d.sunset}${d.awake ? '' : ' · sleeping'}` : 'Set a location to use real sunrise and sunset times.';
+  $('sun').textContent = d.warning ? d.warning : d.sunrise ? `Sunrise ${d.sunrise} · sunset ${d.sunset}${d.awake ? '' : ' · sleeping'}` : 'Set a location to use real sunrise and sunset times.';
   $('llmHint').textContent = st.llm_error ? 'Ollama not reachable: using a simple word-bank drift instead.' : '';
   const slots = st.prompt_slots || {}, orig = st.original_slots || {};
   $('slots').innerHTML = Object.entries(slots).filter(([,v]) => v).map(([k, v]) =>
@@ -395,11 +403,16 @@ document.querySelectorAll('[data-preset]').forEach(b => b.onclick = async () => 
   await refresh(); toast(b.querySelector('b').textContent + ' look applied');
 });
 $('btnApplyPrompt').onclick = () => save({base_prompt: $('base_prompt').value.trim()}, 'New idea: the next window will start from it');
+$('btnSurprise').onclick = async () => {
+  const b = $('btnSurprise'); b.disabled = true; b.textContent = 'Dreaming…';
+  try { await api('/api/action/surprise', {}); await refresh(); toast('Something new is on its way'); }
+  catch (e) { toast(e); }
+  finally { b.disabled = false; b.textContent = 'Surprise me'; }
+};
 $('btnResetDrift').onclick = () => api('/api/action/reset_drift', {}).then(() => toast('Back to the original idea'));
 $('btnNext').onclick = () => api('/api/action/next', {}).then(() => toast(ST.pending ? 'Fading to the next one' : 'Will show as soon as it’s ready'));
 $('btnPause').onclick = () => api('/api/action/' + (S.paused ? 'resume' : 'pause'), {}).then(refresh);
 $('btnStar').onclick = () => ST.current && api('/api/action/star', {id: ST.current.id, value: !ST.current.starred}).then(() => { refresh(); loadGallery(); });
-$('btnCalib').onclick = () => api('/api/action/calibrate', {}).then(() => toast('Test pattern on the window. Press Next or pick a history image to leave.'));
 
 // LoRAs
 function renderLoras() {
@@ -429,24 +442,32 @@ api('/api/llm_models').then(models => {
 });
 
 // gallery
+let galleryLimit = 90;
 async function loadGallery() {
-  const items = await api(`/api/history?limit=90&starred=${starredOnly}`);
+  const items = await api(`/api/history?limit=${galleryLimit}&starred=${starredOnly}`);
+  $('btnMore').hidden = items.length < galleryLimit;
   $('gallery').innerHTML = items.map(e => `<button data-id="${e.id}"><img loading="lazy" src="/images/${e.file}?v=${e.v||0}" alt="">${e.starred ? '<span class="star">★</span>' : ''}</button>`).join('')
     || '<div class="hint">Nothing yet.</div>';
   $('gallery').querySelectorAll('button').forEach(b => b.onclick = () => openDetail(items.find(e => e.id === b.dataset.id)));
 }
+$('btnMore').onclick = () => { galleryLimit += 90; loadGallery(); };
 $('btnStarredOnly').onclick = () => { starredOnly = !starredOnly; $('btnStarredOnly').textContent = starredOnly ? 'Show all' : 'Starred only'; loadGallery(); };
 function openDetail(e) {
   detailId = e.id;
   $('dImg').src = `/images/${e.file}?v=${e.v||0}`;
-  $('dMeta').textContent = `${e.time} · seed ${e.seed} · ${e.gen_seconds}s`;
+  $('dMeta').textContent = `${e.time} · seed ${e.seed} · took ${dur(e.gen_seconds)}`;
   $('dPrompt').textContent = e.prompt;
   $('dStar').textContent = e.starred ? '★' : '☆';
   $('detail').showModal();
 }
 $('dClose').onclick = () => $('detail').close();
+$('dDelete').onclick = async () => {
+  if (!confirm("Delete this image? This can't be undone.")) return;
+  try { await api('/api/action/delete', {id: detailId}); $('detail').close(); toast('Deleted'); loadGallery(); }
+  catch (e) { toast(e); }
+};
 $('dShow').onclick = () => api('/api/action/show', {id: detailId}).then(() => { $('detail').close(); toast('On the window'); });
-$('dRestart').onclick = () => api('/api/action/restart_from', {id: detailId}).then(() => { $('detail').close(); toast('The drift continues from this one'); });
+$('dRestart').onclick = () => api('/api/action/restart_from', {id: detailId}).then(() => { $('detail').close(); refresh(); toast('New starting point: the next window starts from this one'); });
 $('dStar').onclick = async () => {
   const on = $('dStar').textContent === '☆';
   await api('/api/action/star', {id: detailId, value: on}); $('dStar').textContent = on ? '★' : '☆'; loadGallery();

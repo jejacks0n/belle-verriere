@@ -56,10 +56,23 @@ def time_hint(s: Settings, when: datetime | None = None) -> str | None:
     return "deep sunset reds, oranges and violet"
 
 
+def location_warning(s: Settings, when: datetime) -> str | None:
+    """Catch a flipped longitude sign: the sun's clock offset there should be within a few hours
+    of this Mac's time zone (west is negative, e.g. Colorado is about -104.6)."""
+    if s.longitude is None:
+        return None
+    clock = when.utcoffset().total_seconds() / 3600
+    if abs(s.longitude / 15 - clock) > 3:
+        return (f"That longitude doesn't match this Mac's time zone. West of Greenwich is negative "
+                f"(try {-s.longitude}).")
+    return None
+
+
 def status(s: Settings) -> dict:
     when = now()
     st = _sun_times(s, when)
     return {
+        "warning": location_warning(s, when),
         "awake": is_awake(s, when),
         "sunrise": st[0].strftime("%H:%M") if st else None,
         "sunset": st[1].strftime("%H:%M") if st else None,

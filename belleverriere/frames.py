@@ -69,7 +69,7 @@ def render_frame(name: str, w: int, h: int, lead: int = 5, saddle_bars: bool = T
     """
     x, y = _grid(w, h)
     unit = min(w, h)
-    border = max(lead * 2, int(unit * 0.035))     # stone/outer lead border
+    border = max(lead * 2, int(unit * 0.008))     # thin outer lead edge; more just wastes screen
     band = max(lead * 4, int(unit * 0.06))         # decorative pane band inside the border
 
     opaque = np.zeros((h, w), dtype=bool)
@@ -131,7 +131,7 @@ def render_frame(name: str, w: int, h: int, lead: int = 5, saddle_bars: bool = T
         opaque |= (x < border) | (x >= w - border) | (y < border) | (y >= h - border)
         inner = (x >= border + band) & (x < w - border - band) & (y >= border + band) & (y < h - border - band)
         ring = ~inner & ~opaque
-        shape = inner
+        shape = ~opaque  # the picture runs under the border band, so the band isn't left dark
         edge = (np.abs(x - (border + band)) < lead / 2) | (np.abs(x - (w - border - band)) < lead / 2) | \
                (np.abs(y - (border + band)) < lead / 2) | (np.abs(y - (h - border - band)) < lead / 2)
         opaque |= (edge & ~opaque & (ring | inner) & _near_rect(x, y, w, h, border + band, lead))
@@ -184,7 +184,7 @@ def shape_start_image(name: str, w: int, h: int) -> Image.Image:
     return Image.fromarray(out.clip(0, 255).astype(np.uint8), "RGB")
 
 
-if __name__ == "__main__":  # quick visual check: python -m stainedwindow.frames
+if __name__ == "__main__":  # quick visual check: python -m belleverriere.frames
     import sys
     out = sys.argv[1] if len(sys.argv) > 1 else "frames_preview.png"
     tiles = [render_frame(f, 270, 480).convert("RGB") for f in FRAMES]

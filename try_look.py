@@ -9,8 +9,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from stainedwindow.glass import make_glass
-from stainedwindow.settings import PRESETS, Settings
+from belleverriere.glass import make_glass
+from belleverriere.settings import PRESETS, Settings
 
 KEYS = ["frame", "glass_strength", "colors", "cell_smoothing", "lead_width", "saturation", "contrast",
         "texture", "saddle_bars", "trace_leads", "shard_smoothing"]

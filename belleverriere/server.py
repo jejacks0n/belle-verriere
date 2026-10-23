@@ -21,7 +21,7 @@ STATIC = Path(__file__).resolve().parent.parent / "static"
 
 
 def create_app(backend_kind: str = "mflux") -> FastAPI:
-    app = FastAPI(title="Stained Window")
+    app = FastAPI(title="Belle Verrière")
     clients: set[WebSocket] = set()
     loop_holder: dict = {}
 
@@ -66,6 +66,11 @@ def create_app(backend_kind: str = "mflux") -> FastAPI:
     async def state():
         return {"settings": asdict(engine.settings), **engine.status_dict()}
 
+    @app.get("/api/display")
+    async def display_state():
+        """What the window should show right now, for clients that poll (the Roku app)."""
+        return {**engine.current_message(), **engine.display_config()}
+
     @app.post("/api/settings")
     async def update_settings(changes: dict):
         new, changed = settings_mod.update(engine.settings, changes)
@@ -96,15 +101,22 @@ def create_app(backend_kind: str = "mflux") -> FastAPI:
                 engine.reset_drift()
             elif name == "star":
                 engine.star(body["id"], bool(body.get("value", True)))
+            elif name == "surprise":
+                idea = await asyncio.to_thread(engine.invent)
+                await update_settings({"base_prompt": idea["idea"], "drift_guidance": idea["rules"]})
+                engine.next_now()
+                return {"ok": True, **idea}
+            elif name == "delete":
+                engine.delete(body["id"])
             elif name == "preset":
                 preset = settings_mod.PRESETS[body["name"]]
                 await update_settings({**preset, "preset": body["name"]})
-            elif name == "calibrate":
-                await asyncio.to_thread(engine.show_calibration)
             else:
                 raise HTTPException(404, f"unknown action {name}")
         except KeyError as e:
             raise HTTPException(404, f"no such image {e}")
+        except ValueError as e:
+            raise HTTPException(409, str(e))
         await _broadcast({"type": "status"})
         return {"ok": True}
 
