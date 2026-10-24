@@ -6,6 +6,10 @@ data/
 __pycache__/
 *.pyc
 
+# Other
+/docs/mockups
+/docs/superpowers
+
 # macOS
 .DS_Store
 

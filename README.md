@@ -2,11 +2,18 @@
 
 > “For me a stained glass window is a transparent partition between my heart and the world’s heart.” — Marc Chagall
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="static/belle-verriere-logo-white.svg">
+  <img src="static/belle-verriere-logo.svg" alt="Belle Verrière logo" width="120" align="left">
+</picture>
+
 I built Belle Verrière to explore a modern take on stained glass. Blending an ancient medium with generative tools to create an ever-changing light installation for my workspace.
 
 Mounted directly within a window, a transparent LCD panel sits between the room and the sky outside. There is no artificial backlight -- only the natural sun, passing clouds, and shifting daylight and shadows from the trees casting colored silhouettes, refractions, and deep leaded shadows across my office floor and my desk throughout the day.
 
 I’ve always loved the expressive, floating color fields of Marc Chagall’s windows and the timeless depth of cathedral glass like Notre-Dame de la Belle-Verrière at Chartres. With this project, I wanted to bring that tradition into a quiet dialogue with modern technology. Instead of treating a screen like a monitor you stare at, it lives as part of the architecture of the room.
+
+<br clear="left">
 
 # How It Works
 
@@ -18,18 +25,6 @@ The piece is designed around slow, wandering transformation rather than rapid ge
 - Natural Light: Because the LCD is transparent, the weather and time of day dictate the mood. Direct afternoon sun burns bright colors onto the desk, while gray overcast days soften the window into gentle, moody tones.
 
 It’s an ongoing experiment in ambient art: a small slice of glass, an idea, an LLM, and the sun working together to cast something new into the room every day.
-
-
-```
-phone ──► control page ─┐
-                        ▼
-              run.py (FastAPI) ── prompt drift ──► Ollama (local LLM)
-                        │
-                        ├── Z-Image Turbo via mflux (Apple Silicon, MLX)
-                        ├── glass post-processing (leads, shard smoothing, frame)
-                        ▼
-              display page (open it full screen on the panel, crossfades)
-```
 
 ## Setup (once)
 
