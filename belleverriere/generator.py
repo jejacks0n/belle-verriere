@@ -1,21 +1,16 @@
-"""Image generation backends.
-
-MfluxBackend runs Z-Image Turbo natively on Apple Silicon through mflux/MLX.
-MockBackend draws random colored shapes so everything else can be tested anywhere.
-"""
+"""Image generation: Z-Image Turbo running natively on Apple Silicon through mflux/MLX."""
 from __future__ import annotations
 
 import gc
-import random
 import threading
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image
 
-from .frames import control_image, shape_start_image
+from .frames import shape_start_image
 from .settings import Settings
 
 
@@ -31,7 +26,7 @@ class GenRequest:
 
 def _model_key(s: Settings) -> tuple:
     loras = tuple((l.path, round(l.scale, 3)) for l in s.loras if l.enabled)
-    return (s.model_path, s.quantize, s.float16_compute, s.use_controlnet, loras)
+    return (s.model_path, s.quantize, s.float16_compute, loras)
 
 
 class _StepHook:
@@ -98,20 +93,14 @@ class MfluxBackend:
             lora_paths=[l.path for l in loras] or None,
             lora_scales=[l.scale for l in loras] or None,
         )
-        print(f"[mflux] loading model (controlnet={s.use_controlnet}, loras={len(loras)}) ...")
-        if s.use_controlnet:
-            from mflux.models.z_image import ZImageTurboControlnet
-            # The ControlNet checkpoint bundles its own Turbo transformer; quantize it on load.
-            common["quantize"] = s.quantize or 8
-            self._model = ZImageTurboControlnet(**common)
-        else:
-            from mflux.models.common.config import ModelConfig
-            from mflux.models.z_image import ZImage
-            extra = {}
-            if s.float16_compute:
-                extra["compute_precision"] = mx.float16
-            self._model = ZImage(model_config=ModelConfig.z_image_turbo(),
-                                 model_path=s.model_path, **common, **extra)
+        print(f"[mflux] loading model (loras={len(loras)}) ...")
+        from mflux.models.common.config import ModelConfig
+        from mflux.models.z_image import ZImage
+        extra = {}
+        if s.float16_compute:
+            extra["compute_precision"] = mx.float16
+        self._model = ZImage(model_config=ModelConfig.z_image_turbo(),
+                             model_path=s.model_path, **common, **extra)
         self._model.callbacks.register(self._hook)
         self._key = key
         print("[mflux] model ready")
@@ -121,28 +110,14 @@ class MfluxBackend:
         with self._lock:
             model = self._load(s)
             self._hook.on_step = on_step
-            if s.use_controlnet:
-                from mflux.models.z_image.variants.controlnet.control_types import ControlSpec, ControlType
-                hint = self.work_dir / f"shape_{s.frame}_{req.width}x{req.height}.png"
-                if not hint.exists():
-                    control_image(s.frame, req.width, req.height).save(hint)
+            shaped = s.shape_strength > 0 and s.frame != "none"
+            with _shaped_noise(self._shape_latent(model, s.frame, req.width, req.height),
+                               s.shape_strength) if shaped else nullcontext():
                 out = model.generate_image(
                     seed=req.seed, prompt=req.prompt,
-                    controls=[ControlSpec(type=ControlType.canny, image_path=str(hint),
-                                          strength=s.controlnet_strength)],
-                    controlnet_strength=1.0,
-                    num_inference_steps=s.controlnet_steps,
+                    num_inference_steps=req.steps,
                     width=req.width, height=req.height,
                 )
-            else:
-                shaped = s.shape_strength > 0 and s.frame != "none"
-                with _shaped_noise(self._shape_latent(model, s.frame, req.width, req.height),
-                                   s.shape_strength) if shaped else nullcontext():
-                    out = model.generate_image(
-                        seed=req.seed, prompt=req.prompt,
-                        num_inference_steps=req.steps,
-                        width=req.width, height=req.height,
-                    )
             img = out.image.copy()
             del out
             import mlx.core as mx
@@ -173,39 +148,3 @@ class MfluxBackend:
             self._shape = (None, None)
             gc.collect()
 
-
-class MockBackend:
-    """Random bold shapes, for testing the pipeline without a GPU."""
-    name = "mock"
-
-    def __init__(self, work_dir: Path, delay: float = 2.0):
-        self.delay = delay
-
-    def generate(self, req: GenRequest, s: Settings, on_step: Callable[[int, int], None] | None = None) -> Image.Image:
-        import time
-        for i in range(req.steps):
-            time.sleep(self.delay / req.steps)
-            if on_step:
-                on_step(i + 1, req.steps)
-        rnd = random.Random(req.seed)
-        img = Image.new("RGB", (req.width, req.height), tuple(rnd.randint(0, 80) for _ in range(3)))
-        d = ImageDraw.Draw(img)
-        for _ in range(40):
-            x, y = rnd.randint(-100, req.width), rnd.randint(-100, req.height)
-            r = rnd.randint(30, 260)
-            col = tuple(rnd.randint(30, 255) for _ in range(3))
-            if rnd.random() < 0.5:
-                d.ellipse([x, y, x + r, y + r], fill=col)
-            else:
-                d.polygon([(x, y), (x + r, y + rnd.randint(-r, r)), (x + rnd.randint(-r, r), y + r)], fill=col)
-        d.text((20, 20), req.prompt[:60], fill=(255, 255, 255))
-        return img.filter(ImageFilter.GaussianBlur(2))
-
-    def unload(self):
-        pass
-
-
-def make_backend(kind: str, work_dir: Path):
-    if kind == "mock":
-        return MockBackend(work_dir)
-    return MfluxBackend(work_dir)

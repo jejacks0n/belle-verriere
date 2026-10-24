@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import threading
 from dataclasses import asdict
@@ -13,17 +14,18 @@ from fastapi.staticfiles import StaticFiles
 
 from . import settings as settings_mod
 from .engine import IMAGES_DIR, Engine
-from .generator import make_backend
+from .generator import MfluxBackend
 from .glass import make_glass
 from .settings import DATA_DIR
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 
 
-def create_app(backend_kind: str = "mflux") -> FastAPI:
+def create_app() -> FastAPI:
     app = FastAPI(title="Belle Verrière")
     clients: set[WebSocket] = set()
     loop_holder: dict = {}
+    changed = {"event": asyncio.Event()}  # set (and replaced) on every broadcast; wakes long polls
 
     def emit(msg: dict):
         loop = loop_holder.get("loop")
@@ -31,6 +33,8 @@ def create_app(backend_kind: str = "mflux") -> FastAPI:
             asyncio.run_coroutine_threadsafe(_broadcast(msg), loop)
 
     async def _broadcast(msg: dict):
+        changed["event"].set()
+        changed["event"] = asyncio.Event()
         if msg.get("type") == "status":
             msg = {"type": "status", **engine.status_dict()}
         data = json.dumps(msg)
@@ -42,7 +46,7 @@ def create_app(backend_kind: str = "mflux") -> FastAPI:
 
     s = settings_mod.load()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    engine = Engine(s, make_backend(backend_kind, DATA_DIR), emit)
+    engine = Engine(s, MfluxBackend(DATA_DIR), emit)
     app.state.engine = engine
 
     @app.on_event("startup")
@@ -66,10 +70,28 @@ def create_app(backend_kind: str = "mflux") -> FastAPI:
     async def state():
         return {"settings": asdict(engine.settings), **engine.status_dict()}
 
+    def _display() -> dict:
+        d = {**engine.current_message(), **engine.display_config()}
+        key = json.dumps([d.get("type"), d.get("url"), d.get("crossfade"), d.get("rotation")])
+        d["token"] = hashlib.sha1(key.encode()).hexdigest()[:12]
+        return d
+
     @app.get("/api/display")
-    async def display_state():
-        """What the window should show right now, for clients that poll (the Roku app)."""
-        return {**engine.current_message(), **engine.display_config()}
+    async def display_state(seen: str = ""):
+        """What the window should show, for clients that poll (the Roku app). Long polling: pass
+        the last answer's token as ?seen= and this waits, up to 25s, until something changes."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 25
+        while True:
+            wake = changed["event"]  # taken before reading, so a change in between isn't missed
+            d = _display()
+            remaining = deadline - loop.time()
+            if d["token"] != seen or remaining <= 0:
+                return d
+            try:
+                await asyncio.wait_for(wake.wait(), remaining)
+            except asyncio.TimeoutError:
+                pass
 
     @app.post("/api/settings")
     async def update_settings(changes: dict):

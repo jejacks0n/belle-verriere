@@ -210,7 +210,7 @@ dialog .body { padding: 14px 16px 16px; }
     <label class="field"><div class="lbl">Style (never drifts)</div><textarea data-key="style_prompt"></textarea></label>
     <label class="field"><div class="lbl">Model (Hugging Face repo or local folder)</div><input type="text" data-key="model_path"></label>
     <div class="grid2">
-      <label class="field"><div class="lbl">Steps (no ControlNet) <b data-out="steps"></b></div>
+      <label class="field"><div class="lbl">Steps <b data-out="steps"></b></div>
         <input type="range" min="4" max="20" step="1" data-key="steps"></label>
       <label class="field"><div class="lbl">Quantize</div>
         <select data-key="quantize"><option value="">Already quantized</option><option value="8">8-bit</option><option value="4">4-bit</option></select></label>
@@ -220,13 +220,7 @@ dialog .body { padding: 14px 16px 16px; }
     <div class="switch"><span>Float16 compute (faster on M1)</span><input type="checkbox" data-key="float16_compute"></div>
     <label class="field"><div class="lbl">Fit the picture to the window shape <b data-out="shape_strength"></b></div>
       <input type="range" min="0" max="0.05" step="0.01" data-key="shape_strength">
-      <div class="hint">0 is off. 0.03 nudges the picture toward the shape and stays sharp; higher starts to blur. No effect with "No frame" or ControlNet on.</div></label>
-    <div class="switch"><span>Shape the picture to the frame (ControlNet, slower)</span><input type="checkbox" data-key="use_controlnet"></div>
-    <label class="field"><div class="lbl">Frame influence <b data-out="controlnet_strength"></b></div>
-      <input type="range" min="0.3" max="1" step="0.05" data-key="controlnet_strength"></label>
-    <label class="field"><div class="lbl">ControlNet steps <b data-out="controlnet_steps"></b></div>
-      <input type="range" min="6" max="28" step="1" data-key="controlnet_steps">
-      <div class="hint">About 20 is clean; fewer is faster but softer.</div></label>
+      <div class="hint">0 is off. 0.03 nudges the picture toward the shape and stays sharp; higher starts to blur. No effect with "No frame".</div></label>
     <div class="lbl" style="margin-top:16px;color:var(--muted);font-size:13px">LoRAs (repo id or .safetensors path, strength)</div>
     <div id="loras"></div>
     <div class="row" style="margin-top:8px"><button id="btnAddLora">Add LoRA</button><button class="primary" id="btnSaveLoras">Save LoRAs</button></div>
@@ -313,7 +307,7 @@ function fill(settings) {
     const out = document.querySelector(`[data-out="${el.dataset.key}"]`);
     if (out) out.textContent = fmt(el.dataset.key, el, v);
   });
-  if (document.activeElement !== $('base_prompt')) $('base_prompt').value = S.base_prompt;
+  if (!ideaEdited && document.activeElement !== $('base_prompt')) $('base_prompt').value = S.base_prompt;
   renderLoras();
   $('driftSlots').querySelectorAll('input').forEach(c => c.checked = (S.drift_slots || []).includes(c.value));
   document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('on', b.dataset.preset === S.preset));
@@ -402,10 +396,13 @@ document.querySelectorAll('[data-preset]').forEach(b => b.onclick = async () => 
   savedGlass = null; $('savebar').classList.remove('show');
   await refresh(); toast(b.querySelector('b').textContent + ' look applied');
 });
-$('btnApplyPrompt').onclick = () => save({base_prompt: $('base_prompt').value.trim()}, 'New idea: the next window will start from it');
+// typed-but-not-started text in the idea box survives refreshes until it's started or replaced
+let ideaEdited = false;
+$('base_prompt').addEventListener('input', () => ideaEdited = true);
+$('btnApplyPrompt').onclick = () => (ideaEdited = false, save({base_prompt: $('base_prompt').value.trim()}, 'New idea: the next window will start from it'));
 $('btnSurprise').onclick = async () => {
   const b = $('btnSurprise'); b.disabled = true; b.textContent = 'Dreaming…';
-  try { await api('/api/action/surprise', {}); await refresh(); toast('Something new is on its way'); }
+  try { await api('/api/action/surprise', {}); ideaEdited = false; await refresh(); toast('Something new is on its way'); }
   catch (e) { toast(e); }
   finally { b.disabled = false; b.textContent = 'Surprise me'; }
 };
@@ -467,7 +464,7 @@ $('dDelete').onclick = async () => {
   catch (e) { toast(e); }
 };
 $('dShow').onclick = () => api('/api/action/show', {id: detailId}).then(() => { $('detail').close(); toast('On the window'); });
-$('dRestart').onclick = () => api('/api/action/restart_from', {id: detailId}).then(() => { $('detail').close(); refresh(); toast('New starting point: the next window starts from this one'); });
+$('dRestart').onclick = () => api('/api/action/restart_from', {id: detailId}).then(() => { $('detail').close(); ideaEdited = false; refresh(); toast('New starting point: the next window starts from this one'); });
 $('dStar').onclick = async () => {
   const on = $('dStar').textContent === '☆';
   await api('/api/action/star', {id: detailId, value: on}); $('dStar').textContent = on ? '★' : '☆'; loadGallery();

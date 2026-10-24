@@ -26,13 +26,18 @@ sub init()
     m.outInterp = m.top.findNode("outInterp")
     m.server = CreateObject("roAppInfo").GetValue("server_url")
     m.top.findNode("hint").text = "Waiting for " + m.server
-    layout(0)
+    ' The Roku keeps its own rotation (the panel's mounting), separate from the web display's.
+    ' Left/right on the remote turn it 90 degrees; it's remembered on the Roku.
+    saved = CreateObject("roRegistrySection", "window").Read("rotation")
+    if saved = "" then saved = "270"
+    layout(saved.ToInt())
+    m.top.setFocus(true)
     for each p in m.posters
         p.observeField("loadStatus", "onLoaded")
     end for
     m.task = CreateObject("roSGNode", "PollTask")
     m.task.server = m.server
-    m.task.observeField("state", "onState")
+    m.task.observeField("display", "onState")
     m.task.control = "RUN"
 end sub
 
@@ -55,9 +60,24 @@ sub layout(degrees as integer)
     end for
 end sub
 
+function onKeyEvent(key as string, press as boolean) as boolean
+    if not press then return false
+    if key = "right"
+        turn = 90
+    else if key = "left"
+        turn = 270
+    else
+        return false
+    end if
+    layout((m.rotation + turn) mod 360)
+    reg = CreateObject("roRegistrySection", "window")
+    reg.Write("rotation", m.rotation.ToStr())
+    reg.Flush()
+    return true
+end function
+
 sub onState()
-    s = m.task.state
-    if s.rotation <> invalid and s.rotation <> m.rotation then layout(s.rotation)
+    s = m.task.display
     if s.crossfade <> invalid then m.crossfade = s.crossfade
     if s["type"] = "blank"
         m.lastUrl = ""

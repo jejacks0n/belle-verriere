@@ -80,3 +80,13 @@ uses the display rotation setting on the control page.
 ## LoRAs
 
 Add them under *Style & model → LoRAs* as a Hugging Face repo id or a local `.safetensors` path, with a strength around 0.5–0.9. The model reloads before the next image. mflux can also train a LoRA on this Mac (`mflux-train`, see the mflux Z-Image docs). Twenty to forty images in the style of your reference would be a good first dataset; on an M1 expect an overnight run.
+
+## License
+
+This project is released under the MIT license:
+
+* https://opensource.org/licenses/MIT
+
+Copyright 2026 &copy; [jejacks0n](https://github.com/jejacks0n)
+
+## Make Code Not War ♥

@@ -156,14 +156,6 @@ def glass_area(name: str, w: int, h: int) -> Image.Image:
     return render_frame(name, w, h, lead=max(2, w // 200), saddle_bars=False, silhouette=True)
 
 
-def control_image(name: str, w: int, h: int) -> Image.Image:
-    """A picture the ControlNet's canny detector can read: a mid-gray silhouette on black,
-    so the only edge is the window's outline and the frame's own detail is left to the overlay."""
-    img = Image.new("RGB", (w, h), (10, 10, 10))
-    img.paste((150, 150, 150), mask=glass_area(name, w, h))
-    return img
-
-
 def shape_start_image(name: str, w: int, h: int) -> Image.Image:
     """Dark stone outside the window opening and random colored glass shards inside. A little of
     this is mixed into the starting noise so the model composes the figure within the shape.

@@ -27,7 +27,7 @@ MAX_HISTORY = 600  # older, un-starred images are deleted
 GLASS_KEYS = {"frame", "glass_strength", "colors", "cell_smoothing", "lead_width", "saturation",
               "contrast", "texture", "saddle_bars", "out_width", "out_height", "trace_leads", "shard_smoothing"}
 CONTENT_KEYS = {"style_prompt", "negative_prompt", "model_path", "quantize", "float16_compute", "steps",
-                "gen_width", "gen_height", "loras", "shape_strength", "use_controlnet", "controlnet_strength", "controlnet_steps"}
+                "gen_width", "gen_height", "loras", "shape_strength"}
 
 
 class Engine:

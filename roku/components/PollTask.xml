@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Asks the server what the window should show, every few seconds, and publishes changes. -->
+<!-- Asks the server what the window should show and publishes changes. Long polling: the server
+     holds each request until something changes (or ~25s), so changes arrive right away. -->
 <component name="PollTask" extends="Task">
   <interface>
     <field id="server" type="string" />
-    <field id="state" type="assocarray" />
+    <!-- not "state": every Task already has a "state" field (init/run/stop) -->
+    <field id="display" type="assocarray" />
   </interface>
   <script type="text/brightscript"><![CDATA[
 sub init()
@@ -12,18 +14,19 @@ end sub
 
 sub poll()
     http = CreateObject("roUrlTransfer")
-    http.SetUrl(m.top.server + "/api/display")
-    last = ""
+    http.SetMinimumTransferRate(1, 45)  ' give up on a silent connection after 45s (server waits 25s)
+    seen = ""
     while true
+        http.SetUrl(m.top.server + "/api/display?seen=" + seen)
         body = http.GetToString()
-        if body <> "" and body <> last
-            data = ParseJson(body)
-            if data <> invalid
-                m.top.state = data
-                last = body
-            end if
+        data = invalid
+        if body <> "" then data = ParseJson(body)
+        if data = invalid or data.token = invalid
+            sleep(3000)  ' server down or restarting: try again shortly
+        else
+            if data.token <> seen then m.top.display = data
+            seen = data.token
         end if
-        sleep(3000)
     end while
 end sub
   ]]></script>

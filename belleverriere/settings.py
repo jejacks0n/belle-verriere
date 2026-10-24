@@ -64,9 +64,6 @@ class Settings:
     gen_height: int = 1280
     loras: list[LoraSpec] = field(default_factory=list)
     shape_strength: float = 0.0  # mix the frame's shape into the starting noise; 0 = off, 0.03 tested, 0.05+ blurs
-    use_controlnet: bool = False  # bend the composition to the window frame (slower: ~20 steps)
-    controlnet_strength: float = 0.75
-    controlnet_steps: int = 20
 
     # --- Window frame & glass look -------------------------------------------
     preset: str = "between"      # last preset applied (informational)
