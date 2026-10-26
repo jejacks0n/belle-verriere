@@ -10,16 +10,8 @@ SERVER_URL=${SERVER_URL:-http://$($PY -c 'import sys; sys.path.insert(0, ".."); 
 
 BUILD=$(mktemp -d)
 trap 'rm -rf "$BUILD"' EXIT
-cp -R manifest source components "$BUILD/"
+cp -R manifest source components images "$BUILD/"
 sed -i '' "s|__SERVER_URL__|$SERVER_URL|" "$BUILD/manifest"
-mkdir "$BUILD/images"
-$PY - "$BUILD/images" <<'EOF'
-import sys
-from PIL import Image, ImageOps
-src = Image.open("../examples/reference.png").convert("RGB")
-for name, size in (("icon_fhd.png", (540, 405)), ("icon_hd.png", (290, 218))):
-    ImageOps.fit(src, size, centering=(0.5, 0.35)).save(f"{sys.argv[1]}/{name}")
-EOF
 
 rm -f belle-verriere.zip
 (cd "$BUILD" && zip -qr - .) > belle-verriere.zip
