@@ -35,10 +35,29 @@ sub init()
     for each p in m.posters
         p.observeField("loadStatus", "onLoaded")
     end for
+    startPolling()
+end sub
+
+' A fresh connection to the server. Any old one is stopped and ignored, even if it's stuck.
+sub startPolling()
+    if m.task <> invalid
+        m.task.unobserveField("display")
+        m.task.control = "STOP"
+    end if
     m.task = CreateObject("roSGNode", "PollTask")
     m.task.server = m.server
     m.task.observeField("display", "onState")
     m.task.control = "RUN"
+end sub
+
+' Refresh (the replay or OK button): reconnect and load the current picture again, even if it's
+' already on screen, so a picture that failed or a connection that stalled gets another try.
+sub refresh()
+    m.lastUrl = ""
+    hint = m.top.findNode("hint")
+    hint.text = "Refreshing from " + m.server
+    hint.visible = true
+    startPolling()
 end sub
 
 ' Fill the screen. For 90/270 the poster is portrait-sized and turned (positive rotation is
@@ -62,6 +81,10 @@ end sub
 
 function onKeyEvent(key as string, press as boolean) as boolean
     if not press then return false
+    if key = "replay" or key = "OK"
+        refresh()
+        return true
+    end if
     if key = "right"
         turn = 90
     else if key = "left"
@@ -93,7 +116,15 @@ end sub
 sub onLoaded(event as object)
     p = event.getRoSGNode()
     back = m.posters[1 - m.front]
-    if p.loadStatus <> "ready" or not p.isSameNode(back) then return
+    if not p.isSameNode(back) then return
+    if p.loadStatus = "failed" and p.uri <> ""  ' clearing uri to force a reload also reports "failed"
+        hint = m.top.findNode("hint")
+        hint.text = "Couldn't load the picture. Press replay or OK to try again."
+        hint.visible = true
+        m.lastUrl = ""
+        return
+    end if
+    if p.loadStatus <> "ready" then return
     m.top.findNode("hint").visible = false
     fade(back, m.posters[m.front], m.crossfade)
     m.front = 1 - m.front

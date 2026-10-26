@@ -26,7 +26,13 @@ rm -f belle-verriere.zip
 echo "Built roku/belle-verriere.zip (server: $SERVER_URL)"
 
 if [ -n "${ROKU_IP:-}" ]; then
-  curl -sS --user "rokudev:${ROKU_PASS:?set ROKU_PASS to your Roku developer password}" --digest \
-    -F "mysubmit=Install" -F "archive=@belle-verriere.zip" "http://$ROKU_IP/plugin_install" \
-    | grep -o 'Install Success\|Identical to previous version\|Install Failure[^<]*' || true
+  OUT=$(mktemp)
+  for _ in 1 2; do  # the Roku sometimes rejects the first login (401) even with the right password
+    CODE=$(curl -sS -o "$OUT" -w "%{http_code}" --user "rokudev:${ROKU_PASS:?set ROKU_PASS to your Roku developer password}" \
+      --digest -F "mysubmit=Install" -F "archive=@belle-verriere.zip" "http://$ROKU_IP/plugin_install" || true)
+    [ "$CODE" = "401" ] || break
+  done
+  grep -o 'Install Success\|Identical to previous version\|Install Failure[^<"\\]*' "$OUT" | sort -u | grep . \
+    || echo "No install confirmation from the Roku (HTTP $CODE). Run it again."
+  rm -f "$OUT"
 fi

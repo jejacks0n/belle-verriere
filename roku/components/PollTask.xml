@@ -16,7 +16,7 @@ sub poll()
     http = CreateObject("roUrlTransfer")
     http.SetMinimumTransferRate(1, 45)  ' give up on a silent connection after 45s (server waits 25s)
     seen = ""
-    while true
+    while LCase(m.top.control) <> "stop"  ' a refresh replaces this task with a new one
         http.SetUrl(m.top.server + "/api/display?seen=" + seen)
         body = http.GetToString()
         data = invalid
