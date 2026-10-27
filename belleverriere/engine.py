@@ -329,6 +329,8 @@ class Engine:
             raise GenerationCancelled()
         self.gen_step = (step, total)
         self.emit({"type": "status"})
+        if step < total and self.settings.rest_seconds > 0:
+            time.sleep(self.settings.rest_seconds)  # let the chip cool between steps
 
     def run(self):
         while not self.stop_flag:

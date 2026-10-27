@@ -47,6 +47,7 @@ class Settings:
     # --- Timing -------------------------------------------------------------
     display_seconds: int = 900   # how long each image stays up
     crossfade_seconds: int = 25
+    rest_seconds: int = 0        # pause after each generation step so the computer runs cooler (slower images)
     paused: bool = False         # hold the current image, stop generating
 
     # --- Daylight -----------------------------------------------------------

@@ -162,6 +162,9 @@ dialog .body { padding: 14px 16px 16px; }
       <input type="range" min="60" max="7200" step="60" data-key="display_seconds" data-fmt="duration"></label>
     <label class="field"><div class="lbl">Crossfade <b data-out="crossfade_seconds"></b></div>
       <input type="range" min="0" max="120" step="1" data-key="crossfade_seconds" data-fmt="duration"></label>
+    <label class="field"><div class="lbl">Rest between steps <b data-out="rest_seconds"></b></div>
+      <input type="range" min="0" max="20" step="1" data-key="rest_seconds" data-fmt="duration">
+      <div class="hint">Pauses after each step so the computer runs cooler. Images take longer; keep the window time longer than an image takes.</div></label>
     <div class="hint" id="genTime"></div>
   </div></section></details>
 
