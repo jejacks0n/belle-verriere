@@ -118,7 +118,8 @@ dialog .body { padding: 14px 16px 16px; }
   <div class="head"><h2>The idea</h2></div>
   <div class="body">
     <label class="field"><div class="lbl">What should the window show?</div>
-      <textarea id="base_prompt"></textarea></label>
+      <textarea id="base_prompt"></textarea>
+      <div class="hint">With drift off, this is sent exactly as written, after the style prompt.</div></label>
     <div class="row" style="margin-top:10px">
       <button class="primary" id="btnApplyPrompt">Start from this</button>
       <button id="btnResetDrift">Return to original</button>
@@ -137,6 +138,8 @@ dialog .body { padding: 14px 16px 16px; }
       <input type="range" min="0" max="1" step="0.05" data-key="drift">
       <div class="hint">Left: a neighboring color or pose. Right: surprising leaps.</div></label>
     <div class="switch"><span>Give figures a new pose and framing every image</span><input type="checkbox" data-key="vary_pose"></div>
+    <label class="field" style="margin-top:0"><div class="switch"><span>Always include the rest of my idea word for word</span><input type="checkbox" data-key="keep_details"></div>
+      <div class="hint">Off lets the drift wander further: only the subject and the drifting parts are sent.</div></label>
     <label class="field"><div class="lbl">Rules for the drift</div>
       <textarea data-key="drift_guidance" placeholder="e.g. Settings stay bright and sunlit, never dark or at night."></textarea>
       <div class="hint">The language model follows these when it rewrites the prompt.</div></label>

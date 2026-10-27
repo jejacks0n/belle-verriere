@@ -14,7 +14,7 @@ from PIL import Image
 
 from . import daylight
 from . import settings as settings_mod
-from .drift import Drifter, PromptState, compose, describe
+from .drift import Drifter, PromptState, compose, describe, verbatim
 from .generator import GenRequest
 from .glass import make_glass
 from .settings import DATA_DIR, Settings
@@ -28,6 +28,13 @@ GLASS_KEYS = {"frame", "glass_strength", "colors", "cell_smoothing", "lead_width
               "contrast", "texture", "saddle_bars", "out_width", "out_height", "trace_leads", "shard_smoothing"}
 CONTENT_KEYS = {"style_prompt", "negative_prompt", "model_path", "quantize", "float16_compute", "steps",
                 "gen_width", "gen_height", "loras", "shape_strength"}
+# also part of what gets generated: the prompt and how it drifts
+PROMPT_KEYS = {"frame", "shape_strength", "drift_enabled", "drift", "tether", "mutate_every", "drift_slots",
+               "drift_guidance", "vary_pose", "keep_details", "llm_model", "time_of_day_palette"}
+
+
+class GenerationCancelled(Exception):
+    """Raised from the step callback when settings changed mid-image, to stop it right away."""
 
 
 class Engine:
@@ -84,7 +91,8 @@ class Engine:
     def _load_prompt_state(self) -> PromptState:
         try:
             d = json.loads(PROMPT_STATE_FILE.read_text())
-            if d.get("base_prompt") == self.settings.base_prompt:
+            # states split before "details" existed lost parts of the idea: split those again
+            if d.get("base_prompt") == self.settings.base_prompt and "details" in d.get("original", {}):
                 return PromptState(d["original"], d["current"], d.get("generation", 0), d.get("recent_subjects", []))
         except Exception:
             pass
@@ -117,8 +125,8 @@ class Engine:
             if "base_prompt" in changed:
                 self.prompt = PromptState()
                 self._discard_pending()
-            elif changed & CONTENT_KEYS or "frame" in changed:  # the prompt describes the frame's shape
-                self._discard_pending()
+            elif changed & (CONTENT_KEYS | PROMPT_KEYS):
+                self._discard_pending()  # also stops the image in progress at its next step
             if changed & GLASS_KEYS:
                 for e in (self.current, self.pending):
                     if e:
@@ -130,8 +138,11 @@ class Engine:
         self.wake.set()
 
     def _discard_pending(self):
+        """Settings changed: drop the queued image, stop the one in progress, and show the new one as
+        soon as it's ready instead of waiting out the current window's display time."""
         self.pending = None
         self.epoch += 1
+        self.skip = True
 
     def next_now(self):
         with self.lock:
@@ -242,6 +253,9 @@ class Engine:
 
     def _next_prompt(self) -> tuple[dict, str]:
         s = self.settings
+        if not s.drift_enabled:  # no splitting into parts, no added sentences: what you wrote is what's sent
+            return {"subject": s.base_prompt}, verbatim(s.style_prompt, s.base_prompt,
+                                                       self._next_pose() if s.vary_pose else None)
         ps = self.prompt
         if not ps.original:
             self.status = "reading your prompt"
@@ -253,13 +267,17 @@ class Engine:
         elif s.drift_enabled and ps.generation > 0 and ps.generation % max(1, s.mutate_every) == 0:
             self.status = "drifting the prompt"
             ps.current = self.drifter.mutate(ps, s.drift, s.tether, self.rnd, s.drift_slots, s.drift_guidance)
+        fresh = ps.generation == 0
         ps.generation += 1
         subj = ps.current.get("subject", "")
         if subj and (not ps.recent_subjects or ps.recent_subjects[-1] != subj):
             ps.recent_subjects = (ps.recent_subjects + [subj])[-12:]
         self._save_prompt_state()
-        return dict(ps.current), compose(ps.current, s.style_prompt, daylight.time_hint(s), s.frame,
-                                         self._next_pose() if s.vary_pose else None)
+        pose = self._next_pose() if s.vary_pose else None
+        if fresh:  # the first image of an idea is exactly what you wrote; drift takes over from the next
+            return dict(ps.current), verbatim(s.style_prompt, s.base_prompt, pose)
+        return dict(ps.current), compose(ps.current, s.style_prompt, daylight.time_hint(s), s.frame, pose,
+                                         s.keep_details)
 
     def _next_pose(self) -> str:
         """A pose and framing not used in the last few images."""
@@ -281,7 +299,10 @@ class Engine:
         self.gen_started = t0 = time.time()
         self.emit({"type": "status"})
         try:
-            img = self.backend.generate(req, s, on_step=self._on_step)
+            img = self.backend.generate(req, s, on_step=lambda step, total: self._on_step(step, total, epoch))
+        except GenerationCancelled:
+            print("[engine] settings changed; starting a new image")
+            return None
         finally:
             self.gen_started = None
         self.last_gen_seconds = round(time.time() - t0, 1)
@@ -303,7 +324,9 @@ class Engine:
             self._save_history()
             return e
 
-    def _on_step(self, step: int, total: int):
+    def _on_step(self, step: int, total: int, epoch: int):
+        if epoch != self.epoch:
+            raise GenerationCancelled()
         self.gen_step = (step, total)
         self.emit({"type": "status"})
 

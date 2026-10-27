@@ -99,8 +99,10 @@ class MfluxBackend:
         extra = {}
         if s.float16_compute:
             extra["compute_precision"] = mx.float16
+        # bake_lora=False: baking re-rounds a LoRA into the 4-bit weights and kept only 64% of the
+        # stained-glass LoRA's effect; runtime LoRA layers apply all of it (and were no slower).
         self._model = ZImage(model_config=ModelConfig.z_image_turbo(),
-                             model_path=s.model_path, **common, **extra)
+                             model_path=s.model_path, bake_lora=False, **common, **extra)
         self._model.callbacks.register(self._hook)
         self._key = key
         print("[mflux] model ready")

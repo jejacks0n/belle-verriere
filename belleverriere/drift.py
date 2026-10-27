@@ -9,12 +9,13 @@ Without Ollama, a word-bank fallback still keeps things moving.
 from __future__ import annotations
 
 import json
+import re
 import random
 from dataclasses import dataclass, field
 
 import httpx
 
-SLOTS = ["subject", "action", "setting", "palette", "motif", "mood"]
+SLOTS = ["subject", "action", "setting", "palette", "motif", "mood", "details"]  # details never drifts
 
 SLOT_HELP = {
     "subject": "the main figure(s) or thing depicted",
@@ -23,7 +24,7 @@ SLOT_HELP = {
     "palette": "the dominant glass colors",
     "motif": "the decorative border / recurring ornament",
     "mood": "the feeling or atmosphere",
-}
+}  # "details" isn't asked of the model: the app fills it with whatever phrases the model left out
 
 FALLBACK_BANK = {
     "subject": ["a heron", "a crowned stag", "a woman in armor", "a fox", "an owl", "a lion", "a mermaid",
@@ -82,6 +83,7 @@ FRAMINGS = ["close-up of the head and shoulders", "framed from the waist up", "f
             "small within a wide scene", "seen from a low angle", "seen from slightly above"]
 
 
+
 @dataclass
 class PromptState:
     original: dict[str, str] = field(default_factory=dict)
@@ -94,19 +96,30 @@ def describe(slots: dict[str, str]) -> str:
     """Slots back into a readable idea, for the idea box."""
     body = ", ".join(x for x in (slots.get("subject"), slots.get("action"), slots.get("setting")) if x)
     extras = [f"{k.capitalize()}: {slots[k]}" for k in ("palette", "motif", "mood") if slots.get(k)]
-    return ". ".join(x for x in [body, *extras] if x) + "."
+    details = (slots.get("details") or "").strip().rstrip(".")
+    return ". ".join(x for x in [body, details, *extras] if x) + "."
+
+
+def verbatim(style_prompt: str, idea: str, pose: str | None = None) -> str:
+    """Drift off: the style and the idea exactly as written (plus a pose, if that switch is on)."""
+    text = ", ".join(x.strip().rstrip(",") for x in (style_prompt, idea) if x.strip())
+    if pose:
+        text = text.rstrip(".") + f". Pose: {pose}."
+    return text
 
 
 def compose(slots: dict[str, str], style_prompt: str, time_hint: str | None = None, frame: str = "none",
-            pose: str | None = None) -> str:
+            pose: str | None = None, details: bool = True) -> str:
     from .frames import FRAME_SHAPES
     shape = FRAME_SHAPES.get(frame)
-    parts = [style_prompt.strip().rstrip(".") + "."]
+    parts = [style_prompt.strip().rstrip(".") + "."] if style_prompt.strip() else []
     body = ", ".join(x for x in (slots.get("subject"), slots.get("action"), slots.get("setting")) if x)
     if body:
         parts.append(body[0].upper() + body[1:] + ".")
     if pose:
         parts.append(f"Pose: {pose}.")
+    if details and slots.get("details"):  # the rest of what the owner wrote, as written
+        parts.append(slots["details"].strip().rstrip(".") + ".")
     if shape:  # the app draws the frame; asking for a border makes the model paint a rectangular one
         parts.append(f"The artwork is shaped as {shape} that fills the entire image edge to edge, "
                      "with no wall or stonework around it.")
@@ -114,8 +127,8 @@ def compose(slots: dict[str, str], style_prompt: str, time_hint: str | None = No
             parts.append(f"Ornamental details of {slots['motif']} woven through the glass.")
     else:
         parts.append("The glass fills the entire image edge to edge.")
-        if slots.get("motif"):
-            parts.append(f"Decorative border of {slots['motif']}.")
+        if slots.get("motif"):  # not "border": asking for one makes the model paint a frame
+            parts.append(f"Ornamental details of {slots['motif']} woven through the glass.")
     pal = slots.get("palette")
     if pal:
         parts.append(f"Glass colors: {pal}" + (f", {time_hint}" if time_hint else "") + ".")
@@ -124,6 +137,18 @@ def compose(slots: dict[str, str], style_prompt: str, time_hint: str | None = No
     if slots.get("mood"):
         parts.append(f"Mood: {slots['mood']}.")
     return " ".join(parts)
+
+
+def _with_dropped_phrases(idea: str, slots: dict[str, str]) -> str:
+    """Safety net: any phrase of the idea whose words didn't make it into the parts (a model may quietly
+    drop words) is added to details exactly as written, so nothing the owner wrote is lost."""
+    kept = " ".join(slots.values()).lower()
+    details = ""
+    for phrase in re.split(r"[,.;\n]+", idea):
+        words = [w for w in re.findall(r"[a-z]+", phrase.lower()) if len(w) > 3]
+        if phrase.strip() and any(w not in kept for w in words) and phrase.strip().lower() not in details.lower():
+            details = f"{details}, {phrase.strip()}" if details else phrase.strip()
+    return details
 
 
 class Drifter:
@@ -170,13 +195,16 @@ class Drifter:
 
     def decompose(self, base_prompt: str, guidance: str = "") -> dict[str, str]:
         """Split the user's idea into slots, filling gaps with fitting choices."""
-        system = ("You help design stained glass windows. Split the user's idea into these fields and "
-                  "fill any the user left out with something fitting. Keep each field short (2-12 words). "
-                  "Do not mention stained glass, lead or windows; that style is applied separately. "
+        system = ("You help design stained glass windows. Split the user's idea into these fields. Copy the "
+                  "user's own words into the fields exactly: do not paraphrase, shorten, or drop any words, "
+                  "including words you don't recognize such as trigger words or names. Only fill fields the "
+                  "user left out with something fitting (2-12 words). "
                   "Reply with JSON only, with exactly these keys: " +
                   ", ".join(f'"{k}" ({v})' for k, v in SLOT_HELP.items()) + self._rules(guidance))
         data = self._chat(system, f"Idea: {base_prompt}", 0.4)
-        slots = {k: str(data.get(k, "")).strip() for k in SLOTS} if data else {}
+        slots = {k: str(data.get(k, "")).strip() for k in SLOTS if k != "details"} if data else {}
+        if slots.get("subject"):
+            slots["details"] = _with_dropped_phrases(base_prompt, slots)
         if not slots.get("subject"):
             slots = {k: "" for k in SLOTS}
             slots["subject"] = base_prompt
@@ -210,7 +238,7 @@ class Drifter:
                allowed: list[str] | None = None, guidance: str = "") -> dict[str, str]:
         drift = max(0.0, min(1.0, drift))
         n_change = 1 + int(round(drift * 2.5))            # 1..3 slots (sometimes subject)
-        candidates = [s for s in SLOTS if allowed is None or s in allowed]
+        candidates = [s for s in SLOTS if s != "details" and (allowed is None or s in allowed)]
         if "subject" in candidates and len(candidates) > 1 and drift < 0.5 and rnd.random() > drift * 1.5:
             candidates.remove("subject")                  # small drift: usually leave the subject alone
         if not candidates:
@@ -227,8 +255,9 @@ class Drifter:
 
         system = ("You slowly evolve the content of a stained glass window that changes over hours, like a "
                   "dream drifting from one image to the next. Each step you change only the fields you are "
-                  "told to, and copy the others unchanged. Keep each field short (2-12 words). Never mention "
-                  "stained glass, lead, windows or art styles. Reply with JSON only, keys: " + ", ".join(SLOTS) +
+                  "told to, and copy the others unchanged, word for word. Keep each field short (2-12 words), and "
+                  "keep any words you don't recognize, such as trigger words or names, exactly as written. "
+                  "Reply with JSON only, keys: " + ", ".join(SLOTS) +
                   self._rules(guidance))
         user = (f"Original idea (the anchor): {json.dumps(state.original)}\n"
                 f"Current window: {json.dumps(state.current)}\n"

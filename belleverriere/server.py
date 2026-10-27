@@ -26,6 +26,14 @@ def create_app() -> FastAPI:
     clients: set[WebSocket] = set()
     loop_holder: dict = {}
     changed = {"event": asyncio.Event()}  # set (and replaced) on every broadcast; wakes long polls
+    stopping = {"now": False}
+
+    def release_waiters():
+        """Shutting down: answer held long polls right away so the server can exit cleanly."""
+        stopping["now"] = True
+        loop = loop_holder.get("loop")
+        if loop:
+            loop.call_soon_threadsafe(changed["event"].set)
 
     def emit(msg: dict):
         loop = loop_holder.get("loop")
@@ -48,6 +56,7 @@ def create_app() -> FastAPI:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     engine = Engine(s, MfluxBackend(DATA_DIR), emit)
     app.state.engine = engine
+    app.state.release_waiters = release_waiters
 
     @app.on_event("startup")
     async def _start():
@@ -86,7 +95,7 @@ def create_app() -> FastAPI:
             wake = changed["event"]  # taken before reading, so a change in between isn't missed
             d = _display()
             remaining = deadline - loop.time()
-            if d["token"] != seen or remaining <= 0:
+            if d["token"] != seen or remaining <= 0 or stopping["now"]:
                 return d
             try:
                 await asyncio.wait_for(wake.wait(), remaining)
